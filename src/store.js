@@ -19,7 +19,10 @@ const STORES_FILE = path.join(ROOT, 'data', 'stores.json');
 export const DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(ROOT, 'data');
 const STATUS_FILE = path.join(DATA_DIR, 'status.json');
 
-export const STATUS_OPTIONS = ['未發送', '已發送'];
+export const STATUS_OPTIONS = ['未發送', '已發送', '已張貼'];
+
+/** 已發送與已張貼都算「已處理」，進度條與街道比例用這個判斷。 */
+export const isHandled = (status) => status !== '未發送';
 export const CHANNEL_OPTIONS = ['現場拜訪', '電話', 'LINE', 'Email', 'FB/IG 私訊'];
 
 /** 舊版的六段式狀態 → 現在的二元狀態。只有「已合作」算已發送，其餘一律未發送。 */
@@ -78,6 +81,8 @@ export function listStreets(stores = listStores()) {
       ...street,
       total: items.length,
       sent: items.filter((s) => s.status === '已發送').length,
+      posted: items.filter((s) => s.status === '已張貼').length,
+      handled: items.filter((s) => isHandled(s.status)).length,
     };
   });
 }
@@ -85,12 +90,15 @@ export function listStreets(stores = listStores()) {
 export function snapshot() {
   const stores = listStores();
   const sent = stores.filter((s) => s.status === '已發送').length;
+  const posted = stores.filter((s) => s.status === '已張貼').length;
   return {
     summary: {
       ...catalog.summary,
       sentOriginal: catalog.summary.sent,   // 原始 Excel 底色標記的家數
       sent,                                 // 目前實際的已發送家數
-      unsent: stores.length - sent,
+      posted,
+      handled: sent + posted,
+      unsent: stores.length - sent - posted,
     },
     streets: listStreets(stores),
     stores,

@@ -57,9 +57,10 @@ async function api(url, options) {
 /* ------------------------------------------------------------------ 渲染 */
 
 function renderSummary() {
-  const { total, sent, unsent, streets } = state.summary;
+  const { total, sent, posted, unsent, streets } = state.summary;
   el('statTotal').textContent = total;
   el('statSent').textContent = sent;
+  el('statPosted').textContent = posted;
   el('statUnsent').textContent = unsent;
   el('statStreets').textContent = streets;
 }
@@ -110,7 +111,7 @@ function render() {
   dom.placeholder.hidden = true;
   dom.main.innerHTML = state.groups.map((group) => {
     const open = !state.collapsed.has(group.key);
-    const pct = group.total ? Math.round((group.sent / group.total) * 100) : 0;
+    const pct = group.total ? Math.round((group.handled / group.total) * 100) : 0;
     return `
 <section class="street" data-key="${escapeAttr(group.key)}" data-open="${open}">
   <button type="button" class="street__head" aria-expanded="${open}">
@@ -120,7 +121,7 @@ function render() {
       <span class="street__cats">新增 ${group.total} 家</span>
     </span>
     <span class="street__meta">
-      <span class="street__ratio">${group.sent}/${group.total}</span>
+      <span class="street__ratio">${group.handled}/${group.total}</span>
       <span class="street__ring"><span style="width:${pct}%"></span></span>
     </span>
   </button>

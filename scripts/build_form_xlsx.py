@@ -29,7 +29,7 @@ INPUT_FILL = PatternFill('solid', fgColor='FFFFFF00')      # 待填欄位
 THIN = Side(style='thin', color='FFBFBFBF')
 BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
 
-STATUS_OPTIONS = ['未發送', '已發送']
+STATUS_OPTIONS = ['未發送', '已發送', '已張貼']
 CHANNEL_OPTIONS = ['', '現場拜訪', '電話', 'LINE', 'Email', 'FB/IG 私訊']
 
 FORM_HEADERS = [
@@ -181,7 +181,8 @@ def build_form(wb, data):
     for part in sqref('K'):
         channel_dv.add(part)
 
-    for value, fill_color, font_color in (('已發送', 'FFC6EFCE', 'FF006100'),
+    for value, fill_color, font_color in (('已張貼', 'FFC6EFCE', 'FF006100'),
+                                          ('已發送', 'FFFFEB9C', 'FF9C6500'),
                                           ('未發送', 'FFF2F2F2', 'FF808080')):
         ws.conditional_formatting.add(
             ' '.join(status_ranges),

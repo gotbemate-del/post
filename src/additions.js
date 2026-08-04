@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
 import { makeWriter, readJson } from './jsonfile.js';
-import { DATA_DIR, STATUS_OPTIONS, streetOptions } from './store.js';
+import { DATA_DIR, STATUS_OPTIONS, isHandled, streetOptions } from './store.js';
 
 /**
  * 「新增家數」——原始名單以外、在外面跑的時候現場加進來的店家。
@@ -97,6 +97,8 @@ export function groupByStreet() {
       items: group.items.sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
       total: group.items.length,
       sent: group.items.filter((r) => r.status === '已發送').length,
+      posted: group.items.filter((r) => r.status === '已張貼').length,
+      handled: group.items.filter((r) => isHandled(r.status)).length,
     }))
     .sort((a, b) => a.town.localeCompare(b.town, 'zh-Hant') || a.street.localeCompare(b.street, 'zh-Hant'));
 }
@@ -104,9 +106,17 @@ export function groupByStreet() {
 export function snapshot() {
   const groups = groupByStreet();
   const sent = items.filter((r) => r.status === '已發送').length;
+  const posted = items.filter((r) => r.status === '已張貼').length;
   return {
     groups,
-    summary: { total: items.length, sent, unsent: items.length - sent, streets: groups.length },
+    summary: {
+      total: items.length,
+      sent,
+      posted,
+      handled: sent + posted,
+      unsent: items.length - sent - posted,
+      streets: groups.length,
+    },
     options: { ...streetOptions(), status: STATUS_OPTIONS },
   };
 }

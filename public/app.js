@@ -64,6 +64,9 @@ function telHref(phone) {
   return digits.length >= 6 ? `tel:${digits}` : '';
 }
 
+/** 已發送與已張貼都算「已處理」，進度條與街道比例用這個判斷。 */
+const isHandled = (status) => status !== '未發送';
+
 function fillSelect(select, values, placeholder) {
   select.innerHTML = `<option value="">${placeholder}</option>` +
     values.map((v) => `<option value="${escapeAttr(v)}">${escapeHtml(v)}</option>`).join('');
@@ -112,15 +115,18 @@ function matches(store, f) {
 function renderSummary() {
   const total = state.stores.length;
   const sent = state.stores.filter((s) => s.status === '已發送').length;
+  const posted = state.stores.filter((s) => s.status === '已張貼').length;
+  const handled = sent + posted;
 
   el('statTotal').textContent = total;
   el('statSent').textContent = sent;
-  el('statUnsent').textContent = total - sent;
+  el('statPosted').textContent = posted;
+  el('statUnsent').textContent = total - handled;
   el('statStreets').textContent = state.streets.length;
 
-  const pct = total ? Math.round((sent / total) * 100) : 0;
+  const pct = total ? Math.round((handled / total) * 100) : 0;
   dom.progressFill.style.width = `${pct}%`;
-  dom.progressText.textContent = `${sent}/${total} 已發送（${pct}%）`;
+  dom.progressText.textContent = `${handled}/${total} 已處理（${pct}%）`;
   dom.stats.hidden = false;
   dom.progressWrap.hidden = false;
 }
@@ -181,8 +187,8 @@ function render() {
   const html = state.streets.map((street) => {
     const items = street.store_ids.map((id) => state.byId.get(id)).filter((s) => s && visible.has(s.id));
     if (!items.length) return '';
-    const sent = items.filter((s) => s.status === '已發送').length;
-    const pct = Math.round((sent / items.length) * 100);
+    const handled = items.filter((s) => isHandled(s.status)).length;
+    const pct = Math.round((handled / items.length) * 100);
     const open = !state.collapsed.has(street.key);
     const cats = [...new Set(items.map((s) => s.category))].join('、');
     return `
@@ -194,7 +200,7 @@ function render() {
       <span class="street__cats">${escapeHtml(cats)}</span>
     </span>
     <span class="street__meta">
-      <span class="street__ratio">${sent}/${items.length}</span>
+      <span class="street__ratio">${handled}/${items.length}</span>
       <span class="street__ring"><span style="width:${pct}%"></span></span>
     </span>
   </button>
@@ -231,10 +237,10 @@ function patchCard(store) {
   const section = card.closest('.street');
   if (section) {
     const cards = [...section.querySelectorAll('.store')];
-    const sent = cards.filter((c) => c.dataset.status === '已發送').length;
-    section.querySelector('.street__ratio').textContent = `${sent}/${cards.length}`;
+    const handled = cards.filter((c) => isHandled(c.dataset.status)).length;
+    section.querySelector('.street__ratio').textContent = `${handled}/${cards.length}`;
     section.querySelector('.street__ring > span').style.width =
-      `${Math.round((sent / cards.length) * 100)}%`;
+      `${Math.round((handled / cards.length) * 100)}%`;
   }
   renderSummary();
 }
