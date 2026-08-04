@@ -137,6 +137,31 @@ input:focus, select:focus, textarea:focus {
 .addbox__actions { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .addbox__hint { font-size: .7rem; color: var(--muted); }
 
+/* -------------------------------------------------------------- 佐證照片 */
+
+.shots {
+  margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line);
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+}
+.shot { position: relative; flex: none; line-height: 0; }
+.shot img {
+  width: 62px; height: 62px; object-fit: cover;
+  border-radius: 8px; border: 1px solid var(--line); background: #f4f6fa;
+}
+.shot__x {
+  position: absolute; top: -5px; right: -5px;
+  width: 19px; height: 19px; border-radius: 50%; cursor: pointer;
+  font: inherit; font-size: .6rem; line-height: 1;
+  border: 1px solid var(--line); background: #fff; color: var(--muted);
+}
+.shot__x:hover { background: #fbe6e6; border-color: #f0c2c2; color: #92302f; }
+.shots__add {
+  font: inherit; font-size: .72rem; font-weight: 600; cursor: pointer;
+  padding: 6px 10px; border-radius: 8px; white-space: nowrap;
+  border: 1px dashed var(--line); background: #fff; color: var(--navy);
+}
+.shots__add:hover { background: #f0f3f9; border-style: solid; }
+
 .iconbtn {
   margin-left: auto; flex: none; font: inherit; font-size: .8rem; line-height: 1;
   width: 26px; height: 26px; border-radius: 7px; cursor: pointer;

@@ -6,6 +6,9 @@ data/status.json
 data/status.json.tmp
 data/additions.json
 data/additions.json.tmp
+data/photos.json
+data/photos.json.tmp
+data/photos/
 
 .DS_Store
 ~$*.xlsx

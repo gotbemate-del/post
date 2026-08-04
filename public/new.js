@@ -8,6 +8,7 @@ const state = {
   groups: [],
   summary: { total: 0, sent: 0, unsent: 0, streets: 0 },
   options: { towns: [], streets: [], status: [] },
+  photos: {},
   collapsed: new Set(),
 };
 
@@ -15,7 +16,7 @@ const el = (id) => document.getElementById(id);
 const dom = {
   main: el('main'), placeholder: el('placeholder'), toast: el('toast'), conn: el('conn'),
   form: el('addForm'), addBtn: el('addBtn'), addStatus: el('addStatus'),
-  townList: el('townList'), streetList: el('streetList'),
+  townList: el('townList'), streetList: el('streetList'), photoInput: el('photoInput'),
 };
 
 /* ------------------------------------------------------------------ 工具 */
@@ -108,6 +109,7 @@ function card(record) {
       <label>發送狀態<select data-field="status">${statusOptions}</select></label>
     </div>
   </div>
+  ${Photos.html(state.photos[record.id])}
 </article>`;
 }
 
@@ -198,6 +200,29 @@ dom.main.addEventListener('click', async (event) => {
     return;
   }
 
+  const shoot = event.target.closest('[data-action="photo"]');
+  if (shoot) {
+    const article = shoot.closest('.store');
+    dom.photoInput.dataset.storeId = article.dataset.id;
+    dom.photoInput.dataset.storeName = article.querySelector('.store__name').textContent;
+    dom.photoInput.value = '';
+    dom.photoInput.click();
+    return;
+  }
+
+  const dropShot = event.target.closest('[data-action="photo-remove"]');
+  if (dropShot) {
+    if (!confirm('確定要刪除這張佐證照片？')) return;
+    try {
+      await Photos.remove(dropShot.dataset.photo);
+      await reload();
+      toast('已刪除照片');
+    } catch (err) {
+      toast(`刪除失敗：${err.message}`, 'error');
+    }
+    return;
+  }
+
   const remove = event.target.closest('[data-action="remove"]');
   if (!remove) return;
   const article = remove.closest('.store');
@@ -230,8 +255,26 @@ dom.main.addEventListener('change', async (event) => {
 
 /* ------------------------------------------------------------------ 啟動 */
 
+dom.photoInput.addEventListener('change', async (event) => {
+  const file = event.target.files?.[0];
+  const { storeId, storeName } = event.target.dataset;
+  if (!file || !storeId) return;
+  toast('照片處理中…');
+  try {
+    await Photos.upload(file, storeId, storeName);
+    await reload();
+    toast(`已上傳「${storeName}」的佐證照片`);
+  } catch (err) {
+    toast(`上傳失敗：${err.message}`, 'error');
+  } finally {
+    event.target.value = '';
+  }
+});
+
 async function reload() {
-  ingest(await api('/api/additions'));
+  const [additions, photos] = await Promise.all([api('/api/additions'), api('/api/photos')]);
+  ingest(additions);
+  state.photos = photos.photos ?? {};
   render();
 }
 
@@ -243,11 +286,17 @@ function connect() {
     ingest(JSON.parse(event.data));
     render();
   });
+  source.addEventListener('photos:update', (event) => {
+    state.photos = JSON.parse(event.data).photos ?? {};
+    render();
+  });
 }
 
 async function init() {
   try {
-    ingest(await api('/api/additions'));
+    const [additions, photos] = await Promise.all([api('/api/additions'), api('/api/photos')]);
+    ingest(additions);
+    state.photos = photos.photos ?? {};
   } catch (err) {
     dom.placeholder.textContent = `載入失敗：${err.message}`;
     setConn('offline', '離線');

@@ -9,6 +9,7 @@ const state = {
   streets: [],
   extras: [],
   additions: [],          // 不在原始名單上、在網站上新增的店家
+  photos: {},             // { 店家 id: [佐證照片…] }
   options: { status: [], channel: [] },
   byId: new Map(),
   collapsed: new Set(),   // 收合中的街道 key；預設全部收合，當成街道索引使用
@@ -29,6 +30,7 @@ const dom = {
   toggleAdd: el('toggleAdd'), addbox: el('addbox'), addForm: el('addForm'),
   addBtn: el('addBtn'), addStatus: el('addStatus'),
   townList: el('townList'), streetList: el('streetList'),
+  photoInput: el('photoInput'),
 };
 
 const ADDED_CATEGORY = '新增';
@@ -265,6 +267,7 @@ function storeCard(store) {
     </div>
     <span class="store__saved" data-role="saved"></span>
   </div>
+  ${Photos.html(state.photos[store.id])}
 </article>`;
 }
 
@@ -405,6 +408,30 @@ dom.main.addEventListener('click', async (event) => {
     return;
   }
 
+  const shoot = event.target.closest('[data-action="photo"]');
+  if (shoot) {
+    const card = shoot.closest('.store');
+    dom.photoInput.dataset.storeId = card.dataset.id;
+    dom.photoInput.dataset.storeName = card.querySelector('.store__name').textContent;
+    dom.photoInput.value = '';        // same file 再選一次也要觸發 change
+    dom.photoInput.click();
+    return;
+  }
+
+  const dropShot = event.target.closest('[data-action="photo-remove"]');
+  if (dropShot) {
+    if (!confirm('確定要刪除這張佐證照片？')) return;
+    try {
+      await Photos.remove(dropShot.dataset.photo);
+      await reloadPhotos();
+      render();
+      toast('已刪除照片');
+    } catch (err) {
+      toast(`刪除失敗：${err.message}`, 'error');
+    }
+    return;
+  }
+
   const remove = event.target.closest('[data-action="remove"]');
   if (!remove) return;
   const card = remove.closest('.store');
@@ -454,6 +481,23 @@ dom.main.addEventListener('input', (event) => {
   const savedEl = card.querySelector('[data-role="saved"]');
   savedEl.textContent = '輸入中…';
   saveDebounced(card.dataset.id, { [input.dataset.field]: input.value }, savedEl);
+});
+
+dom.photoInput.addEventListener('change', async (event) => {
+  const file = event.target.files?.[0];
+  const { storeId, storeName } = event.target.dataset;
+  if (!file || !storeId) return;
+  toast('照片處理中…');
+  try {
+    await Photos.upload(file, storeId, storeName);
+    await reloadPhotos();
+    render();
+    toast(`已上傳「${storeName}」的佐證照片`);
+  } catch (err) {
+    toast(`上傳失敗：${err.message}`, 'error');
+  } finally {
+    event.target.value = '';
+  }
 });
 
 const rerender = debounce(render, 180);
@@ -530,6 +574,12 @@ async function reloadAdditions() {
   ingestAdditions(await res.json());
 }
 
+async function reloadPhotos() {
+  const res = await fetch('/api/photos');
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  state.photos = (await res.json()).photos ?? {};
+}
+
 function buildFilterOptions() {
   const uniq = (values) => [...new Set(values.filter(Boolean))];
   fillSelect(dom.fTown, uniq(state.stores.map((s) => s.town)), '全部');
@@ -559,16 +609,24 @@ function connect() {
     ingestAdditions(JSON.parse(event.data));
     render();
   });
+  source.addEventListener('photos:update', (event) => {
+    state.photos = JSON.parse(event.data).photos ?? {};
+    render();
+  });
 }
 
 async function init() {
   try {
-    const [data, additions] = await Promise.all([
-      fetch('/api/data').then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }),
-      fetch('/api/additions').then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }),
+    const get = (url) => fetch(url).then((r) => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    });
+    const [data, additions, photos] = await Promise.all([
+      get('/api/data'), get('/api/additions'), get('/api/photos'),
     ]);
     ingest(data);
     ingestAdditions(additions);
+    state.photos = photos.photos ?? {};
   } catch (err) {
     dom.placeholder.textContent = `載入失敗：${err.message}`;
     setConn('offline', '離線');

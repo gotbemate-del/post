@@ -6,6 +6,10 @@ import {
   additionsFilePath, createAddition, removeAddition,
   snapshot as additionsSnapshot, updateAddition,
 } from './additions.js';
+import {
+  ACCEPTED_TYPES, addPhoto, photoDir, removePhoto,
+  snapshot as photosSnapshot,
+} from './photos.js';
 import { getStore, snapshot, statusFilePath, updateStore } from './store.js';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -102,6 +106,45 @@ app.patch('/api/additions/:id', (req, res) => {
 app.delete('/api/additions/:id', (req, res) => {
   if (!removeAddition(req.params.id)) return res.status(404).json({ error: '查無此新增店家' });
   broadcastAdditions();
+  res.status(204).end();
+});
+
+/* ------------------------------------------------------------ 佐證照片 */
+
+// 圖檔本身直接靜態送出；快取一天，檔名帶 uuid 不會重複所以不必怕舊圖
+app.use('/photos', express.static(photoDir(), { maxAge: '1d', fallthrough: true }));
+
+function broadcastPhotos() {
+  broadcast('photos:update', photosSnapshot());
+}
+
+app.get('/api/photos', (req, res) => {
+  res.json(photosSnapshot());
+});
+
+app.post('/api/photos/:storeId',
+  express.raw({ type: ACCEPTED_TYPES, limit: '6mb' }),
+  (req, res) => {
+    try {
+      if (!Buffer.isBuffer(req.body)) {
+        return res.status(415).json({ error: '請以 image/jpeg、image/png 或 image/webp 上傳' });
+      }
+      const record = addPhoto({
+        storeId: req.params.storeId,
+        storeName: req.query.name,
+        buffer: req.body,
+        mime: req.get('content-type')?.split(';')[0].trim(),
+      });
+      broadcastPhotos();
+      res.status(201).json(record);
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+app.delete('/api/photos/:id', (req, res) => {
+  if (!removePhoto(req.params.id)) return res.status(404).json({ error: '查無此照片' });
+  broadcastPhotos();
   res.status(204).end();
 });
 

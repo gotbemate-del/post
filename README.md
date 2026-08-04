@@ -56,9 +56,17 @@ npm start                            # http://localhost:3000
 | Region | Singapore |
 | Disk | 無 |
 
-**⚠️ free 方案的填寫紀錄不會保留。** 發送狀態存在 `data/status.json`、新增的店家存在
-`data/additions.json`，而 free 方案的檔案系統是暫時的——服務休眠重啟或重新部署後，所有人填的
-內容和新增的店家都會消失、退回 Excel 的初始狀態。
+**⚠️ free 方案的填寫紀錄不會保留。** 執行期資料都寫在檔案系統上，而 free 方案的檔案系統是
+暫時的——服務休眠重啟或重新部署後，下面這些全部消失、退回 Excel 的初始狀態：
+
+| 檔案 | 內容 | 掉了能不能重建 |
+| --- | --- | --- |
+| `data/status.json` | 發送狀態、打勾時間 | 部分（104 家能從 Excel 底色重建，時間不行） |
+| `data/additions.json` | 新增的店家 | 不能 |
+| `data/photos/`、`data/photos.json` | 佐證照片 | 不能 |
+
+**要實際使用就必須掛 Persistent Disk。** 照片尤其吃空間：一張約 25～300 KB，
+326 家每家一張約 10～100 MB，1 GB 夠用但要留意。
 
 要長期保留紀錄，把 `render.yaml` 改成 Starter 以上並掛 Persistent Disk（free 不支援）：
 
@@ -107,6 +115,8 @@ Render 的免費／Starter 方案在閒置後會休眠，第一次開啟頁面�
   卡片顯示成台灣時間 `2026/08/04 10:58`。時戳由伺服器產生、前端改不動
 - **分日完成數**：統計列下面依打勾日期（台灣時間）列出 `8/4 完成`、`8/5 完成`、`8/6 完成`。
   要增減天數改 `public/app.js` 的 `DAILY_DATES`；不在名單上的日期會併進「其他日期」那一格
+- **佐證照片**：每張卡片可以拍照或選圖上傳，**店名會用白底黑字燒在照片左上角**。
+  可以放多張、點縮圖看原圖、按 ✕ 刪除。主頁和 `/new` 共用同一份照片
 - **快捷操作**：一鍵撥號、Google 地圖導航、開啟官網／粉專
 
 ### `/new` 新增家數
@@ -136,7 +146,27 @@ Render 的免費／Starter 方案在閒置後會休眠，第一次開啟頁面�
 | `PATCH` | `/api/additions/:id` | 更新新增的店家，欄位同上 |
 | `DELETE` | `/api/additions/:id` | 刪除新增的店家 |
 
+| `GET` | `/api/photos` | 所有佐證照片的中繼資料，`{ photos: { 店家id: [...] }, total }` |
+| `POST` | `/api/photos/:storeId` | 上傳照片，body 是**原始二進位圖檔**（非 multipart），`?name=` 帶店名 |
+| `DELETE` | `/api/photos/:id` | 刪除照片（同時刪檔） |
+| `GET` | `/photos/:file` | 照片本體（靜態） |
+
 兩組 `PATCH` 回傳的 `sentAt` 都是伺服器自己維護的，帶在請求裡會被忽略。
+
+### 照片是怎麼處理的
+
+縮圖、壓縮、燒店名全都在**瀏覽器端**做完才上傳（`public/photo.js`）：
+
+1. `createImageBitmap(..., { imageOrientation: 'from-image' })` 先處理手機照片的 EXIF 旋轉
+2. 縮到最長邊 1280
+3. 左上角畫白底矩形 + 黑字店名，名字太長會自動縮字級，縮到下限仍放不下才截斷加 `…`
+4. 輸出 JPEG（品質 0.82）再送出
+
+實測 1600×1200 的圖進來，出去是 1280×960、約 25 KB。手機原圖 3～5 MB 直接傳的話，
+上傳時間和儲存量都會差一到兩個數量級，所以這步不能省。
+
+伺服器只負責存檔（`$DATA_DIR/photos/<uuid>.jpg`）和維護索引（`$DATA_DIR/photos.json`），
+檔名一律用伺服器產生的 UUID，不會把使用者輸入拼進路徑。
 | `GET` | `/api/events` | SSE 事件串流，事件名 `store:update`、`additions:update` |
 | `GET` | `/healthz` | 健康檢查 |
 
