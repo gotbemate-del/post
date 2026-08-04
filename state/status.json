@@ -1,0 +1,29 @@
+{
+ "旅行社-112": {
+  "status": "已發送",
+  "sentAt": "2026-08-04T06:39:34.540Z",
+  "contactedAt": "",
+  "channel": "",
+  "owner": "",
+  "reply": "",
+  "updatedAt": "2026-08-04T06:39:34.540Z"
+ },
+ "餐廳-56": {
+  "status": "已發送",
+  "sentAt": "2026-08-04T06:41:13.271Z",
+  "contactedAt": "",
+  "channel": "",
+  "owner": "",
+  "reply": "",
+  "updatedAt": "2026-08-04T06:41:13.271Z"
+ },
+ "旅行社-173": {
+  "status": "已發送",
+  "sentAt": "2026-08-04T06:47:24.933Z",
+  "contactedAt": "",
+  "channel": "",
+  "owner": "",
+  "reply": "",
+  "updatedAt": "2026-08-04T06:47:24.933Z"
+ }
+}
