@@ -210,6 +210,12 @@ dom.main.addEventListener('click', async (event) => {
     return;
   }
 
+  const openShot = event.target.closest('[data-action="photo-open"]');
+  if (openShot) {
+    Photos.open(state.photos[openShot.dataset.store] ?? [], Number(openShot.dataset.index));
+    return;
+  }
+
   const dropShot = event.target.closest('[data-action="photo-remove"]');
   if (dropShot) {
     if (!confirm('確定要刪除這張佐證照片？')) return;

@@ -101,11 +101,13 @@ const Photos = (() => {
 
   /** 卡片上的照片區：縮圖 + 上傳鈕。 */
   function html(photos = []) {
-    const thumbs = photos.map((p) => `
+    const thumbs = photos.map((p, index) => `
       <span class="shot">
-        <a href="/photos/${encodeURIComponent(p.file)}" target="_blank" rel="noopener">
+        <button type="button" class="shot__open" data-action="photo-open"
+                data-store="${escapeHtml(p.storeId)}" data-index="${index}"
+                aria-label="預覽 ${escapeHtml(p.storeName)} 的佐證照片">
           <img src="/photos/${encodeURIComponent(p.file)}" alt="${escapeHtml(p.storeName)} 佐證照片" loading="lazy">
-        </a>
+        </button>
         <button type="button" class="shot__x" data-action="photo-remove" data-photo="${escapeHtml(p.id)}"
                 title="刪除這張照片" aria-label="刪除照片">✕</button>
       </span>`).join('');
@@ -116,5 +118,79 @@ const Photos = (() => {
   </div>`;
   }
 
-  return { upload, remove, html };
+  /* ------------------------------------------------------------- 預覽燈箱 */
+
+  let viewer = null;
+  let list = [];
+  let cursor = 0;
+
+  function buildViewer() {
+    const node = document.createElement('div');
+    node.className = 'lightbox';
+    node.hidden = true;
+    node.innerHTML = `
+      <button type="button" class="lightbox__close" data-lb="close" aria-label="關閉預覽">✕</button>
+      <button type="button" class="lightbox__nav lightbox__nav--prev" data-lb="prev" aria-label="上一張">‹</button>
+      <figure class="lightbox__figure">
+        <img class="lightbox__img" alt="">
+        <figcaption class="lightbox__caption"></figcaption>
+      </figure>
+      <button type="button" class="lightbox__nav lightbox__nav--next" data-lb="next" aria-label="下一張">›</button>`;
+    document.body.appendChild(node);
+
+    node.addEventListener('click', (event) => {
+      const action = event.target.closest('[data-lb]')?.dataset.lb;
+      if (action === 'prev') step(-1);
+      else if (action === 'next') step(1);
+      // 點圖片以外的地方（背景）也關掉
+      else if (action === 'close' || !event.target.closest('.lightbox__figure')) close();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (node.hidden) return;
+      if (event.key === 'Escape') close();
+      else if (event.key === 'ArrowLeft') step(-1);
+      else if (event.key === 'ArrowRight') step(1);
+    });
+    return node;
+  }
+
+  function show() {
+    const photo = list[cursor];
+    if (!photo) return close();
+    viewer.querySelector('.lightbox__img').src = `/photos/${encodeURIComponent(photo.file)}`;
+    const at = new Date(photo.createdAt).toLocaleString('zh-TW', {
+      timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hour12: false,
+    });
+    viewer.querySelector('.lightbox__caption').textContent =
+      `${photo.storeName}　${at}　${cursor + 1}/${list.length}`;
+    const solo = list.length < 2;
+    for (const nav of viewer.querySelectorAll('.lightbox__nav')) nav.hidden = solo;
+  }
+
+  function step(delta) {
+    if (!list.length) return;
+    cursor = (cursor + delta + list.length) % list.length;
+    show();
+  }
+
+  function close() {
+    if (!viewer) return;
+    viewer.hidden = true;
+    viewer.querySelector('.lightbox__img').src = '';
+    document.body.classList.remove('is-locked');
+  }
+
+  /** 開啟預覽；photos 是同一家店的照片，index 是點到的那張。 */
+  function open(photos, index = 0) {
+    if (!photos?.length) return;
+    viewer ??= buildViewer();
+    list = photos;
+    cursor = Math.min(Math.max(index, 0), photos.length - 1);
+    viewer.hidden = false;
+    document.body.classList.add('is-locked');
+    show();
+  }
+
+  return { upload, remove, html, open };
 })();

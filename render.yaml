@@ -2,10 +2,14 @@
 #
 # 目前設定為 free 方案，沒有掛 Persistent Disk。
 #
-# ⚠️ 填寫的聯繫狀態存在專案內的 data/status.json，free 方案的檔案系統是暫時的，
-#    服務休眠重啟或重新部署後，所有人填的紀錄都會歸零、退回 Excel 的初始狀態。
+# ⚠️ free 方案的檔案系統是暫時的，服務休眠重啟或重新部署後，$DATA_DIR 底下的東西都會消失：
+#      data/status.json     發送狀態與打勾時間
+#      data/additions.json  新增的店家
+#      data/photos/         佐證照片
 #
-# 要長期保留紀錄，改成 starter 以上並掛磁碟（free 不支援 Persistent Disk）：
+# 佐證照片可以改存 GitHub 來閃掉這個問題 —— 設好 GITHUB_TOKEN 就會自動生效，
+# 照片和索引都會推到 GITHUB_PHOTO_BRANCH 指定的分支（見下方說明）。
+# 發送狀態和新增的店家還是只在檔案系統上，要保留就得掛磁碟：
 #   plan: starter
 #   envVars:  加一組 DATA_DIR = /var/data
 #   disk:     name: store-status / mountPath: /var/data / sizeGB: 1
@@ -21,3 +25,15 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "20"
+
+      # 佐證照片存到 GitHub。沒設 GITHUB_TOKEN 的話照片只留在本機檔案系統，重啟就消失。
+      # token 需要對 GITHUB_REPO 有 contents:write 權限；sync: false 表示值不寫進版控，
+      # 要在 Render 的 Environment 頁面自己填。
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: GITHUB_REPO
+        value: gotbemate-del/post
+      # ⚠️ 一定要跟上面的部署分支不同。Render 的 auto-deploy 綁在部署分支，
+      #    照片推到那條分支的話，每上傳一張就重新部署一次。
+      - key: GITHUB_PHOTO_BRANCH
+        value: photos

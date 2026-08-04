@@ -6,10 +6,12 @@ import {
   additionsFilePath, createAddition, removeAddition,
   snapshot as additionsSnapshot, updateAddition,
 } from './additions.js';
+import * as githubStore from './github.js';
 import {
-  ACCEPTED_TYPES, addPhoto, photoDir, removePhoto,
-  snapshot as photosSnapshot,
+  ACCEPTED_TYPES, addPhoto, ensureLocal, photoDir, photoFiles, removePhoto,
+  restore as restorePhotos, snapshot as photosSnapshot,
 } from './photos.js';
+import { writeZip } from './zip.js';
 import { getStore, snapshot, statusFilePath, updateStore } from './store.js';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -111,8 +113,19 @@ app.delete('/api/additions/:id', (req, res) => {
 
 /* ------------------------------------------------------------ 佐證照片 */
 
-// 圖檔本身直接靜態送出；快取一天，檔名帶 uuid 不會重複所以不必怕舊圖
+// 圖檔本身直接靜態送出；快取一天，檔名帶 uuid 不會重複所以不必怕舊圖。
+// 快取沒命中（例如重啟後本機被清空）就回 GitHub 抓一次再送。
 app.use('/photos', express.static(photoDir(), { maxAge: '1d', fallthrough: true }));
+
+app.get('/photos/:file', async (req, res) => {
+  try {
+    const local = await ensureLocal(req.params.file);
+    if (!local) return res.status(404).json({ error: '查無此照片' });
+    res.sendFile(local, { maxAge: '1d' });
+  } catch (err) {
+    res.status(502).json({ error: `取得照片失敗：${err.message}` });
+  }
+});
 
 function broadcastPhotos() {
   broadcast('photos:update', photosSnapshot());
@@ -124,12 +137,12 @@ app.get('/api/photos', (req, res) => {
 
 app.post('/api/photos/:storeId',
   express.raw({ type: ACCEPTED_TYPES, limit: '6mb' }),
-  (req, res) => {
+  async (req, res) => {
     try {
       if (!Buffer.isBuffer(req.body)) {
         return res.status(415).json({ error: '請以 image/jpeg、image/png 或 image/webp 上傳' });
       }
-      const record = addPhoto({
+      const record = await addPhoto({
         storeId: req.params.storeId,
         storeName: req.query.name,
         buffer: req.body,
@@ -138,14 +151,36 @@ app.post('/api/photos/:storeId',
       broadcastPhotos();
       res.status(201).json(record);
     } catch (err) {
-      res.status(400).json({ error: err.message });
+      res.status(err.status && err.status >= 500 ? 502 : 400).json({ error: err.message });
     }
   });
 
-app.delete('/api/photos/:id', (req, res) => {
-  if (!removePhoto(req.params.id)) return res.status(404).json({ error: '查無此照片' });
-  broadcastPhotos();
-  res.status(204).end();
+app.get('/api/photos/download.zip', async (req, res) => {
+  const files = photoFiles();
+  if (!files.length) return res.status(404).json({ error: '目前沒有任何佐證照片' });
+
+  // 重啟後本機快取是空的，打包前先確定每張都在本機
+  try {
+    for (const file of files) await ensureLocal(path.basename(file.path));
+  } catch (err) {
+    return res.status(502).json({ error: `取得照片失敗：${err.message}` });
+  }
+
+  const stamp = new Date().toISOString().slice(0, 10);
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition',
+    `attachment; filename="photos-${stamp}.zip"; filename*=UTF-8''${encodeURIComponent(`佐證照片-${stamp}.zip`)}`);
+  writeZip(res, files);
+});
+
+app.delete('/api/photos/:id', async (req, res) => {
+  try {
+    if (!await removePhoto(req.params.id)) return res.status(404).json({ error: '查無此照片' });
+    broadcastPhotos();
+    res.status(204).end();
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
 });
 
 app.get('/healthz', (req, res) => {
@@ -154,8 +189,14 @@ app.get('/healthz', (req, res) => {
     clients: clients.size,
     statusFile: statusFilePath(),
     additionsFile: additionsFilePath(),
+    photoStorage: githubStore.enabled()
+      ? { kind: 'github', ...githubStore.config }
+      : { kind: 'local', warning: '未設定 GITHUB_TOKEN，照片重啟後會消失' },
   });
 });
+
+// 先把 GitHub 上的照片索引拉回來再開始服務，免得第一個開頁面的人看到空的
+await restorePhotos();
 
 app.listen(PORT, () => {
   console.log(`澎湖店家確認表單 → http://localhost:${PORT}`);

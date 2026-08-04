@@ -30,7 +30,7 @@ const dom = {
   toggleAdd: el('toggleAdd'), addbox: el('addbox'), addForm: el('addForm'),
   addBtn: el('addBtn'), addStatus: el('addStatus'),
   townList: el('townList'), streetList: el('streetList'),
-  photoInput: el('photoInput'),
+  photoInput: el('photoInput'), downloadShots: el('downloadShots'),
 };
 
 const ADDED_CATEGORY = '新增';
@@ -200,6 +200,11 @@ function renderSummary() {
   el('statStreets').textContent = sectionsWithAdditions().length;
 
   renderDaily(all);
+
+  // 沒有任何照片時不顯示下載鈕，免得按了拿到 404
+  const shots = Object.values(state.photos).reduce((sum, list) => sum + list.length, 0);
+  dom.downloadShots.hidden = shots === 0;
+  dom.downloadShots.textContent = `⬇️ 下載全部照片（${shots}）`;
 
   const pct = all.length ? Math.round((handled / all.length) * 100) : 0;
   dom.progressFill.style.width = `${pct}%`;
@@ -415,6 +420,12 @@ dom.main.addEventListener('click', async (event) => {
     dom.photoInput.dataset.storeName = card.querySelector('.store__name').textContent;
     dom.photoInput.value = '';        // same file 再選一次也要觸發 change
     dom.photoInput.click();
+    return;
+  }
+
+  const openShot = event.target.closest('[data-action="photo-open"]');
+  if (openShot) {
+    Photos.open(state.photos[openShot.dataset.store] ?? [], Number(openShot.dataset.index));
     return;
   }
 
