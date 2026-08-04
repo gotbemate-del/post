@@ -1,25 +1,17 @@
 # Render Blueprint — 澎湖店家確認表單
 #
-# 目前設定為 free 方案，沒有掛 Persistent Disk。
+# 資料存在 Postgres（DATABASE_URL），不是 Render 的檔案系統 ——
+# free 方案的檔案系統是暫時的，重啟就清空，但資料庫不受影響。
 #
-# ⚠️ free 方案的檔案系統是暫時的，服務休眠重啟或重新部署後，$DATA_DIR 底下的東西都會消失：
-#      data/status.json     發送狀態與打勾時間
-#      data/additions.json  新增的店家
-#      data/photos/         佐證照片
-#
-# 設好 GITHUB_TOKEN 就能閃掉這個問題 —— 三種資料都會同步到 GitHub 的資料分支，
-# 重啟時自動還原，free 方案也不會掉（見下方 envVars）。
-#
-# 不想用 GitHub 的話，另一條路是掛 Persistent Disk（Starter 以上才支援）：
-#   plan: starter
-#   envVars:  加一組 DATA_DIR = /var/data
-#   disk:     name: store-status / mountPath: /var/data / sizeGB: 1
+# ⚠️ 目前共用 yong-jing-db（Render 免費方案每個帳號只能有一個資料庫），
+#    表放在獨立的 penghu schema 裡，不會跟另一個專案撞名。
+#    該資料庫 2026-08-29 到期，到期前要升級付費方案，否則兩個專案的資料一起消失。
 services:
   - type: web
     name: penghu-store-confirmation
     runtime: node
     plan: free
-    region: singapore        # 離台灣最近的 Render 區域
+    region: singapore        # 要和資料庫同區，內部連線才走得通
     buildCommand: npm ci
     startCommand: npm start
     healthCheckPath: /healthz
@@ -27,19 +19,14 @@ services:
       - key: NODE_VERSION
         value: "20"
 
-      # 發送狀態／新增店家／佐證照片都同步到 GitHub。沒設 GITHUB_TOKEN 的話只留在本機
-      # 檔案系統，重啟就消失。token 需要對 GITHUB_REPO 有 contents:write 權限；
-      # sync: false 表示值不寫進版控，要在 Render 的 Environment 頁面自己填。
-      - key: GITHUB_TOKEN
+      # Postgres 連線字串。用「內部」連線位址（同區域免費、不繞外網）。
+      # 沒設的話資料只寫本機檔案，重啟就消失。
+      - key: DATABASE_URL
         sync: false
-      - key: GITHUB_REPO
-        value: gotbemate-del/post
-      # ⚠️ 一定要跟上面的部署分支不同。Render 的 auto-deploy 綁在部署分支，
-      #    資料推到那條分支的話，每存一筆就重新部署一次。
-      - key: GITHUB_DATA_BRANCH
-        value: app-data
+      # 資料表放哪個 schema，預設 penghu
+      - key: PG_SCHEMA
+        value: penghu
 
-      # 密碼保護。設了才會擋，沒設就是任何人拿到網址都能開。
-      # 值一樣在 Render 的 Environment 頁面填，不寫進版控。
+      # 密碼保護。沒設就是任何人拿到網址都能開。
       - key: APP_PASSWORD
         sync: false

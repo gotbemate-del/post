@@ -1,18 +1,18 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import * as db from './db.js';
 import { makeWriter, readJson } from './jsonfile.js';
-import { createSync } from './remotejson.js';
 
 /**
  * 店家狀態儲存層。
  *
  * data/stores.json 是唯讀的基礎名單（由 scripts/parse_xlsx.py 產生）；
- * 使用者在網站上改的狀態另存成 status.json，兩者在讀取時合併。
- * 這樣重新匯入 Excel 名單時不會蓋掉已經填好的聯繫紀錄。
+ * 使用者在網站上改的狀態另存成一份紀錄，兩者在讀取時合併。
+ * 這樣重新匯入 Excel 名單時不會蓋掉已經填好的發送紀錄。
  *
- * DATA_DIR 預設為專案內的 data/，在 Render 上請掛載 Persistent Disk
- * 並把 DATA_DIR 指到掛載點，否則每次重新部署狀態都會歸零。
+ * 有設 DATABASE_URL 就存 Postgres，沒設就寫本機檔案（本機開發用；
+ * Render 的檔案系統是暫時的，重啟就清空）。
  */
 
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -51,15 +51,19 @@ function normalize(raw) {
   return raw;
 }
 
-export const statusSync = createSync('state/status.json', {
-  read: () => status,
-  apply: (data) => { status = normalize(data); },
-  label: () => `發送狀態：${Object.keys(status).length} 筆`,
-});
+/** 開機時把資料庫裡的狀態載進記憶體，蓋掉本機檔案那份。 */
+export async function loadFromDb() {
+  if (!db.enabled()) return false;
+  status = normalize(await db.loadStatus());
+  return true;
+}
 
-function scheduleWrite() {
-  writeLocal();
-  statusSync.schedule();
+function persist(id) {
+  if (db.enabled()) {
+    db.saveStatus(id, status[id]).catch((err) => console.error('[store] 寫入失敗：', err.message));
+  } else {
+    writeLocal();
+  }
 }
 
 /** 原始 Excel 有底色 = 已發送，作為沒有人工紀錄時的預設狀態。 */
@@ -162,7 +166,7 @@ export function updateStore(id, patch) {
   next.updatedAt = new Date().toISOString();
 
   status[id] = next;
-  scheduleWrite();
+  persist(id);
   return { ...storeIndex.get(id), ...next };
 }
 

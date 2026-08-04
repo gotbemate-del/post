@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
+import * as db from './db.js';
 import { makeWriter, readJson } from './jsonfile.js';
-import { createSync } from './remotejson.js';
 import { DATA_DIR, STATUS_OPTIONS, isHandled, stampSentAt, streetOptions } from './store.js';
 
 /**
@@ -26,15 +26,27 @@ function load() {
   return Array.isArray(raw) ? raw : [];
 }
 
-export const additionsSync = createSync('state/additions.json', {
-  read: () => items,
-  apply: (data) => { if (Array.isArray(data)) items = data; },
-  label: () => `新增店家：${items.length} 家`,
-});
+/** 開機時把資料庫裡的新增店家載進記憶體。 */
+export async function loadFromDb() {
+  if (!db.enabled()) return false;
+  items = await db.loadAdditions();
+  return true;
+}
 
-function scheduleWrite() {
-  writeLocal();
-  additionsSync.schedule();
+function persist(record) {
+  if (db.enabled()) {
+    db.saveAddition(record).catch((err) => console.error('[additions] 寫入失敗：', err.message));
+  } else {
+    writeLocal();
+  }
+}
+
+function forget(id) {
+  if (db.enabled()) {
+    db.deleteAddition(id).catch((err) => console.error('[additions] 刪除失敗：', err.message));
+  } else {
+    writeLocal();
+  }
 }
 
 function text(value, field) {
@@ -74,7 +86,7 @@ export function createAddition(patch = {}) {
     updatedAt: null,
   }, patch);
   items.push(record);
-  scheduleWrite();
+  persist(record);
   return record;
 }
 
@@ -84,7 +96,7 @@ export function updateAddition(id, patch = {}) {
   // 驗證失敗時不能留下改到一半的紀錄，先在副本上套用
   const next = applyFields({ ...record }, patch);
   Object.assign(record, next);
-  scheduleWrite();
+  persist(record);
   return record;
 }
 
@@ -92,7 +104,7 @@ export function removeAddition(id) {
   const index = items.findIndex((r) => r.id === id);
   if (index === -1) return false;
   items.splice(index, 1);
-  scheduleWrite();
+  forget(id);
   return true;
 }
 

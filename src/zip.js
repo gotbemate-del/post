@@ -1,5 +1,3 @@
-import fs from 'node:fs';
-
 /**
  * 極簡 ZIP 打包器（只用 store 模式，不壓縮）。
  *
@@ -91,18 +89,20 @@ function endOfCentralDirectory(entries, cdSize, cdOffset) {
 
 /**
  * 把檔案逐一寫進 out（任何 Writable，例如 res）。
- * files: [{ path, name, date }]，name 是壓縮檔裡的路徑。
+ * files: [{ name, date, read() }]，name 是壓縮檔裡的路徑，
+ * read() 回傳 Buffer（可以是 Promise）——一次只讀一個，記憶體才不會被整包撐爆。
  */
-export function writeZip(out, files) {
+export async function writeZip(out, files) {
   const entries = [];
   let offset = 0;
 
   for (const file of files) {
     let data;
     try {
-      data = fs.readFileSync(file.path);
+      data = await file.read();
+      if (!data) throw new Error('沒有內容');
     } catch (err) {
-      console.error(`[zip] 略過讀不到的檔案 ${file.path}：`, err.message);
+      console.error(`[zip] 略過讀不到的照片 ${file.name}：`, err.message);
       continue;
     }
     const { time, date } = dosDateTime(file.date);

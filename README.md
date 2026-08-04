@@ -56,25 +56,10 @@ npm start                            # http://localhost:3000
 | Region | Singapore |
 | Disk | 無 |
 
-**⚠️ free 方案的檔案系統是暫時的**，服務休眠重啟或重新部署後 `data/` 底下全部消失。
-執行期資料有三種：發送狀態與打勾時間、新增的店家、佐證照片。
+**執行期資料都存在 Postgres**，不受 Render 檔案系統影響。free 方案的檔案系統是暫時的
+（休眠重啟就清空），但發送狀態、打勾時間、新增店家、佐證照片都在資料庫裡，重啟後自動載回來。
 
-**設好 `GITHUB_TOKEN` 就能解決**——三種資料都會同步到 GitHub，重啟時自動還原，
-free 方案也不會掉（見下方「把資料存到 GitHub」）。不想用 GitHub 的話就得掛 Persistent Disk
-（Starter 以上），把 `DATA_DIR` 指到掛載點。**兩者都沒有的話，資料只會活到下次重啟。**
-
-要長期保留紀錄，把 `render.yaml` 改成 Starter 以上並掛 Persistent Disk（free 不支援）：
-
-```yaml
-plan: starter
-envVars:
-  - key: DATA_DIR
-    value: /var/data
-disk:
-  name: store-status
-  mountPath: /var/data
-  sizeGB: 1
-```
+只有**沒設 `DATABASE_URL`** 時才會退回寫本機檔案，那種情況下重啟資料就會消失。
 
 Render 的免費／Starter 方案在閒置後會休眠，第一次開啟頁面約需 30 秒喚醒，屬正常現象。
 
@@ -178,50 +163,6 @@ Render 的免費／Starter 方案在閒置後會休眠，第一次開啟頁面�
 
 伺服器只負責存檔（`$DATA_DIR/photos/<uuid>.jpg`）和維護索引（`$DATA_DIR/photos.json`），
 檔名一律用伺服器產生的 UUID，不會把使用者輸入拼進路徑。
-
-## 把資料存到 GitHub（解決 free 方案存不住的問題）
-
-設了 `GITHUB_TOKEN` 之後，**發送狀態、新增的店家、佐證照片**都會同步一份到 GitHub 的資料分支，
-本機檔案系統只當快取。Render free 方案重啟清空後，開機時會自動從 GitHub 還原。
-
-| 環境變數 | 說明 |
-| --- | --- |
-| `GITHUB_TOKEN` | 對 repo 有 `contents:write` 權限的 token。**沒設就整個功能關閉**，退回只存本機 |
-| `GITHUB_REPO` | 預設 `gotbemate-del/post` |
-| `GITHUB_DATA_BRANCH` | 預設 `app-data`，分支不存在會自動建立 |
-
-分支上的檔案：
-
-```
-state/status.json      發送狀態、打勾時間
-state/additions.json   新增的店家
-photos/index.json      照片索引
-photos/<uuid>.jpg      照片本體
-```
-
-### 幾個要注意的設計
-
-**寫入要防抖。** 勾一輪 326 家店就是 326 次寫入，每次推一個 commit 的話又慢又把歷史洗爆。
-所以本機照舊即時寫，GitHub 這邊等安靜 5 秒才推一次，把連續操作併成一個 commit
-（實測 3 次狀態變更 + 1 次新增只產生 2 個 commit）。照片索引例外，`delay: 0` 立刻推，
-因為照片本體已經上去了，索引晚推會對不起來。
-
-**關站前要 flush。** Render 重新部署前送 `SIGTERM`，這時要把還在防抖等待中的異動推完再退出，
-否則最後幾秒的操作只留在即將消失的本機。
-
-**照片是先推 GitHub、成功了才登記進索引**——反過來的話索引會指到一張不存在的照片。
-圖檔則是等有人要看時才回源抓並寫進快取，打包下載前也會先確保每張都在本機。
-
-**`GITHUB_DATA_BRANCH` 一定要跟 Render 的部署分支不同。** Render 的 auto-deploy 綁在部署
-分支上，資料推到那條分支的話，每存一筆就會觸發一次重新部署，人在外面跑的時候服務會斷。
-
-**照片會留在 git 歷史裡。** 在網站上刪掉只是刪掉最新版，歷史裡那份還在。
-repo 目前是 private，所以不會公開，但要真正清掉得改寫歷史。
-| `GET` | `/api/events` | SSE 事件串流，事件名 `store:update`、`additions:update` |
-| `GET` | `/healthz` | 健康檢查 |
-
-`PATCH /api/stores/:id` 的 `contactedAt` / `channel` / `owner` / `reply` 目前**在網頁上是隱藏的**
-（卡片只留發送狀態），但 API 與資料結構都還在，要恢復顯示只需改 `public/app.js` 的 `storeCard()`。
 
 ## 更新名單
 

@@ -3,16 +3,18 @@ import path from 'node:path';
 import express from 'express';
 
 import {
-  additionsFilePath, additionsSync, createAddition, removeAddition,
+  additionsFilePath, createAddition, loadFromDb as loadAdditions, removeAddition,
   snapshot as additionsSnapshot, updateAddition,
 } from './additions.js';
 import * as auth from './auth.js';
-import * as githubStore from './github.js';
+import * as db from './db.js';
 import {
-  ACCEPTED_TYPES, addPhoto, ensureLocal, photoDir, photoFiles, photosSync,
-  removePhoto, restore as restorePhotos, snapshot as photosSnapshot,
+  ACCEPTED_TYPES, addPhoto, loadFromDb as loadPhotos, photoFiles,
+  readPhoto, removePhoto, snapshot as photosSnapshot,
 } from './photos.js';
-import { getStore, snapshot, statusFilePath, statusSync, updateStore } from './store.js';
+import {
+  getStore, loadFromDb as loadStatus, snapshot, statusFilePath, updateStore,
+} from './store.js';
 import { writeZip } from './zip.js';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -148,15 +150,14 @@ app.delete('/api/additions/:id', (req, res) => {
 
 /* ------------------------------------------------------------ 佐證照片 */
 
-// 圖檔本身直接靜態送出；快取一天，檔名帶 uuid 不會重複所以不必怕舊圖。
-// 快取沒命中（例如重啟後本機被清空）就回 GitHub 抓一次再送。
-app.use('/photos', express.static(photoDir(), { maxAge: '1d', fallthrough: true }));
-
+// 檔名帶 uuid 不會重複，可以放心讓瀏覽器快取久一點
 app.get('/photos/:file', async (req, res) => {
   try {
-    const local = await ensureLocal(req.params.file);
-    if (!local) return res.status(404).json({ error: '查無此照片' });
-    res.sendFile(local, { maxAge: '1d' });
+    const photo = await readPhoto(req.params.file);
+    if (!photo) return res.status(404).json({ error: '查無此照片' });
+    res.set('Content-Type', photo.mime);
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.send(photo.content);
   } catch (err) {
     res.status(502).json({ error: `取得照片失敗：${err.message}` });
   }
@@ -194,18 +195,14 @@ app.get('/api/photos/download.zip', async (req, res) => {
   const files = photoFiles();
   if (!files.length) return res.status(404).json({ error: '目前沒有任何佐證照片' });
 
-  // 重啟後本機快取是空的，打包前先確定每張都在本機
-  try {
-    for (const file of files) await ensureLocal(path.basename(file.path));
-  } catch (err) {
-    return res.status(502).json({ error: `取得照片失敗：${err.message}` });
-  }
-
   const stamp = new Date().toISOString().slice(0, 10);
   res.setHeader('Content-Type', 'application/zip');
   res.setHeader('Content-Disposition',
     `attachment; filename="photos-${stamp}.zip"; filename*=UTF-8''${encodeURIComponent(`佐證照片-${stamp}.zip`)}`);
-  writeZip(res, files);
+  await writeZip(res, files.map((f) => ({
+    ...f,
+    read: async () => (await readPhoto(f.file))?.content,
+  })));
 });
 
 app.delete('/api/photos/:id', async (req, res) => {
@@ -225,28 +222,23 @@ app.get('/healthz', (req, res) => {
     statusFile: statusFilePath(),
     additionsFile: additionsFilePath(),
     passwordProtected: auth.enabled(),
-    storage: githubStore.enabled()
-      ? { kind: 'github', ...githubStore.config }
-      : { kind: 'local', warning: '未設定 GITHUB_TOKEN，資料與照片重啟後會消失' },
+    storage: db.enabled()
+      ? { kind: 'postgres' }
+      : { kind: 'local', warning: '未設定 DATABASE_URL，資料與照片重啟後會消失' },
   });
 });
 
-/* ------------------------------------------------------- 開機還原 / 關站保存 */
+/* ------------------------------------------------------- 開機載入 / 關站收尾 */
 
-// 先把 GitHub 上的資料拉回來再開始服務，免得第一個開頁面的人看到空的
-if (githubStore.enabled()) {
-  try {
-    await githubStore.readyBranch();
-    const restored = await Promise.all([
-      statusSync.restore(), additionsSync.restore(), restorePhotos(),
-    ]);
-    console.log(`[github] 資料分支 ${githubStore.config.branch}，`
-      + `已還原：發送狀態=${restored[0] ? '有' : '無'}、新增店家=${restored[1] ? '有' : '無'}`);
-  } catch (err) {
-    console.error('[github] 開機還原失敗，改用本機資料：', err.message);
+// 先把資料庫的內容載進來再開始服務，免得第一個開頁面的人看到空的
+try {
+  if (await db.init()) {
+    const loaded = await Promise.all([loadStatus(), loadAdditions(), loadPhotos()]);
+    console.log(`[db] 已載入：發送狀態=${loaded[0] ? '有' : '無'}、`
+      + `新增店家=${loaded[1] ? '有' : '無'}、照片索引=${loaded[2] ? '有' : '無'}`);
   }
-} else {
-  console.log('[storage] 未設定 GITHUB_TOKEN，資料只存在本機，重啟後會消失');
+} catch (err) {
+  console.error('[db] 開機載入失敗，改用本機資料：', err.message);
 }
 
 const server = app.listen(PORT, () => {
@@ -254,7 +246,7 @@ const server = app.listen(PORT, () => {
   console.log(`狀態檔：${statusFilePath()}`);
 });
 
-// Render 重新部署前會送 SIGTERM，這時候要把還在防抖等待中的異動推完再走
+// Render 重新部署前會送 SIGTERM，把連線收乾淨再走
 let closing = false;
 for (const signal of ['SIGTERM', 'SIGINT']) {
   process.on(signal, async () => {
@@ -263,10 +255,9 @@ for (const signal of ['SIGTERM', 'SIGINT']) {
     server.close();
     for (const res of clients) res.end();
     try {
-      await Promise.all([statusSync.flush(), additionsSync.flush(), photosSync.flush()]);
-      console.log('[storage] 關站前已把待推送的異動寫回 GitHub');
+      await db.close();
     } catch (err) {
-      console.error('[storage] 關站前推送失敗：', err.message);
+      console.error('[db] 關閉連線池失敗：', err.message);
     }
     process.exit(0);
   });
