@@ -38,3 +38,8 @@ services:
       #    資料推到那條分支的話，每存一筆就重新部署一次。
       - key: GITHUB_DATA_BRANCH
         value: app-data
+
+      # 密碼保護。設了才會擋，沒設就是任何人拿到網址都能開。
+      # 值一樣在 Render 的 Environment 頁面填，不寫進版控。
+      - key: APP_PASSWORD
+        sync: false

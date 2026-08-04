@@ -6,6 +6,7 @@ import {
   additionsFilePath, additionsSync, createAddition, removeAddition,
   snapshot as additionsSnapshot, updateAddition,
 } from './additions.js';
+import * as auth from './auth.js';
 import * as githubStore from './github.js';
 import {
   ACCEPTED_TYPES, addPhoto, ensureLocal, photoDir, photoFiles, photosSync,
@@ -18,7 +19,41 @@ const ROOT = path.resolve(import.meta.dirname, '..');
 const PORT = process.env.PORT || 3000;
 
 const app = express();
+app.set('trust proxy', 1);            // Render 在前面擋一層 proxy，要靠它拿到真實 IP
 app.use(express.json({ limit: '64kb' }));
+
+/* -------------------------------------------------------------- 密碼保護 */
+
+app.get('/login', (req, res) => {
+  if (!auth.enabled()) return res.redirect('/');
+  res.type('html').send(auth.loginPage({ next: req.query.next || '/' }));
+});
+
+app.post('/login', express.urlencoded({ extended: false, limit: '4kb' }), (req, res) => {
+  if (!auth.enabled()) return res.redirect('/');
+  const next = typeof req.body.next === 'string' && req.body.next.startsWith('/')
+    ? req.body.next : '/';          // 只允許站內轉址，免得被拿來當跳板
+
+  if (auth.locked(req.ip)) {
+    return res.status(429).type('html')
+      .send(auth.loginPage({ next, message: '嘗試太多次，請 15 分鐘後再試。' }));
+  }
+  if (!auth.checkPassword(req.body.password)) {
+    auth.noteFailure(req.ip);
+    return res.status(401).type('html')
+      .send(auth.loginPage({ next, message: '密碼不對，再試一次。' }));
+  }
+  auth.clearFailures(req.ip);
+  auth.setCookie(res, req.secure || req.get('x-forwarded-proto') === 'https');
+  res.redirect(next);
+});
+
+app.post('/logout', (req, res) => {
+  auth.clearCookie(res);
+  res.redirect('/login');
+});
+
+app.use(auth.middleware);
 app.use(express.static(path.join(ROOT, 'public'), { extensions: ['html'] }));
 
 /* ---------------------------------------------------------------- SSE 即時推播 */
@@ -189,6 +224,7 @@ app.get('/healthz', (req, res) => {
     clients: clients.size,
     statusFile: statusFilePath(),
     additionsFile: additionsFilePath(),
+    passwordProtected: auth.enabled(),
     storage: githubStore.enabled()
       ? { kind: 'github', ...githubStore.config }
       : { kind: 'local', warning: '未設定 GITHUB_TOKEN，資料與照片重啟後會消失' },

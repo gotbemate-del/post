@@ -23,6 +23,7 @@
 
   <nav class="pagenav">
     <a href="/new">➕ 新增家數</a>
+    <form method="post" action="/logout" class="pagenav__logout"><button type="submit">登出</button></form>
   </nav>
 
   <div class="stats" id="stats" hidden>
@@ -111,6 +112,7 @@
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <input type="file" id="photoInput" accept="image/*" capture="environment" hidden>
 
+<script src="session.js"></script>
 <script src="photo.js"></script>
 <script src="app.js"></script>
 </body>

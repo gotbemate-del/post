@@ -130,6 +130,13 @@ input:focus, select:focus, textarea:focus {
   background: rgba(255, 255, 255, .16); border: 1px solid rgba(255, 255, 255, .26);
 }
 .pagenav a:hover { background: rgba(255, 255, 255, .26); }
+.pagenav__logout { margin: 0 0 0 auto; }
+.pagenav__logout button {
+  font: inherit; font-size: .72rem; color: rgba(255, 255, 255, .82); cursor: pointer;
+  padding: 5px 10px; border-radius: 999px;
+  background: transparent; border: 1px solid rgba(255, 255, 255, .22);
+}
+.pagenav__logout button:hover { background: rgba(255, 255, 255, .16); color: #fff; }
 
 .addbox { background: var(--card); border-bottom: 1px solid var(--line); padding: 12px 16px; }
 .addbox__title { margin: 0 0 10px; font-size: .85rem; color: var(--navy); }
