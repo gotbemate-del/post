@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f3864">
+<title>澎湖店家確認表單</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗺️</text></svg>">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar__inner">
+    <div class="topbar__title">
+      <h1>澎湖店家確認表單</h1>
+      <p class="topbar__sub">依街道分類 · 即時同步</p>
+    </div>
+    <div class="conn" id="conn" data-state="connecting">
+      <span class="conn__dot"></span><span class="conn__label">連線中</span>
+    </div>
+  </div>
+
+  <div class="stats" id="stats" hidden>
+    <div class="stat"><span class="stat__num" id="statTotal">–</span><span class="stat__label">店家總數</span></div>
+    <div class="stat"><span class="stat__num" id="statContacted">–</span><span class="stat__label">已聯繫</span></div>
+    <div class="stat"><span class="stat__num" id="statDone">–</span><span class="stat__label">已合作</span></div>
+    <div class="stat"><span class="stat__num" id="statStreets">–</span><span class="stat__label">街道／地區</span></div>
+  </div>
+  <div class="progress" id="progressWrap" hidden>
+    <div class="progress__bar"><span id="progressFill"></span></div>
+    <span class="progress__text" id="progressText"></span>
+  </div>
+</header>
+
+<nav class="filters" id="filters" hidden>
+  <div class="filters__row">
+    <label class="field field--search">
+      <span class="sr-only">搜尋店家</span>
+      <input type="search" id="q" placeholder="搜尋店名、地址、電話…" autocomplete="off">
+    </label>
+    <button type="button" class="btn btn--ghost" id="toggleAll">全部展開</button>
+  </div>
+  <div class="filters__row filters__row--selects">
+    <label class="field"><span>鄉鎮市</span><select id="fTown"><option value="">全部</option></select></label>
+    <label class="field"><span>分類</span><select id="fCategory"><option value="">全部</option></select></label>
+    <label class="field"><span>狀態</span><select id="fStatus"><option value="">全部</option></select></label>
+    <label class="field"><span>街道</span><select id="fStreet"><option value="">全部</option></select></label>
+  </div>
+  <div class="filters__row filters__row--chips">
+    <label class="chip"><input type="checkbox" id="fPending"><span>只看未聯繫</span></label>
+    <label class="chip"><input type="checkbox" id="fSentOriginal"><span>只看原始已發送</span></label>
+    <span class="filters__count" id="resultCount"></span>
+  </div>
+</nav>
+
+<main id="main" class="main">
+  <p class="placeholder" id="placeholder">載入名單中…</p>
+</main>
+
+<section class="extras" id="extrasSection" hidden>
+  <h2 class="extras__title">待補名單 <small>（原始檔手動新增、尚無地址，無法歸入街道）</small></h2>
+  <div class="extras__grid" id="extrasGrid"></div>
+</section>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+# Render Blueprint — 澎湖店家確認表單
+#
+# 若已在 Render 手動建立好 Web Service，直接照著這裡的設定填即可：
+#   Build Command : npm ci
+#   Start Command : npm start
+#   Environment   : Node 20+
+#   Disk          : 掛載到 /var/data，並設定 DATA_DIR=/var/data
+#
+# Persistent Disk 是必要的：填寫的聯繫狀態存在 $DATA_DIR/status.json，
+# 沒有掛載磁碟的話每次重新部署就會回到 Excel 的初始狀態。
+services:
+  - type: web
+    name: penghu-store-confirmation
+    runtime: node
+    plan: starter          # free 方案不支援 Persistent Disk
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: DATA_DIR
+        value: /var/data
+    disk:
+      name: store-status
+      mountPath: /var/data
+      sizeGB: 1

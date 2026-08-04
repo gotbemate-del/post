@@ -1,0 +1,9 @@
+node_modules/
+npm-debug.log*
+
+# 線上填寫的聯繫狀態，屬於執行期資料（正式環境放在 Render 的 Persistent Disk）
+data/status.json
+data/status.json.tmp
+
+.DS_Store
+~$*.xlsx

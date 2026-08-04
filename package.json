@@ -1,0 +1,18 @@
+{
+  "name": "penghu-store-confirmation",
+  "version": "1.0.0",
+  "description": "澎湖店家確認表單 — 依街道分類的線上即時更新響應式網站",
+  "type": "module",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  },
+  "license": "MIT"
+}
