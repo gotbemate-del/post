@@ -98,7 +98,7 @@ function matches(store, f) {
   if (f.category && store.category !== f.category) return false;
   if (f.status && store.status !== f.status) return false;
   if (f.street && store.street !== f.street) return false;
-  if (f.pending && store.status !== '未聯繫') return false;
+  if (f.pending && store.status !== '未發送') return false;
   if (f.sentOriginal && !store.sent) return false;
   if (f.q) {
     const hay = `${store.name} ${store.address} ${store.phone} ${store.owner} ${store.reply} ${store.street}`.toLowerCase();
@@ -111,17 +111,16 @@ function matches(store, f) {
 
 function renderSummary() {
   const total = state.stores.length;
-  const contacted = state.stores.filter((s) => s.status !== '未聯繫').length;
-  const done = state.stores.filter((s) => s.status === '已合作').length;
+  const sent = state.stores.filter((s) => s.status === '已發送').length;
 
   el('statTotal').textContent = total;
-  el('statContacted').textContent = contacted;
-  el('statDone').textContent = done;
+  el('statSent').textContent = sent;
+  el('statUnsent').textContent = total - sent;
   el('statStreets').textContent = state.streets.length;
 
-  const pct = total ? Math.round((contacted / total) * 100) : 0;
+  const pct = total ? Math.round((sent / total) * 100) : 0;
   dom.progressFill.style.width = `${pct}%`;
-  dom.progressText.textContent = `${contacted}/${total} 已聯繫（${pct}%）`;
+  dom.progressText.textContent = `${sent}/${total} 已發送（${pct}%）`;
   dom.stats.hidden = false;
   dom.progressWrap.hidden = false;
 }
@@ -160,11 +159,11 @@ function storeCard(store) {
   </div>
   <div class="store__form">
     <div class="store__form-row">
-      <label>聯繫狀態<select data-field="status">${statusOptions}</select></label>
-      <label>聯繫日期<input type="date" data-field="contactedAt" value="${escapeAttr(store.contactedAt || '')}"></label>
+      <label>發送狀態<select data-field="status">${statusOptions}</select></label>
+      <label>發送日期<input type="date" data-field="contactedAt" value="${escapeAttr(store.contactedAt || '')}"></label>
     </div>
     <div class="store__form-row">
-      <label>聯繫方式<select data-field="channel">${channelOptions}</select></label>
+      <label>發送方式<select data-field="channel">${channelOptions}</select></label>
       <label>負責人<input type="text" data-field="owner" value="${escapeAttr(store.owner || '')}" placeholder="姓名"></label>
     </div>
     <label>回覆／備註<textarea data-field="reply" rows="2" placeholder="店家回覆、後續待辦…">${escapeHtml(store.reply || '')}</textarea></label>
@@ -191,8 +190,8 @@ function render() {
   const html = state.streets.map((street) => {
     const items = street.store_ids.map((id) => state.byId.get(id)).filter((s) => s && visible.has(s.id));
     if (!items.length) return '';
-    const contacted = items.filter((s) => s.status !== '未聯繫').length;
-    const pct = Math.round((contacted / items.length) * 100);
+    const sent = items.filter((s) => s.status === '已發送').length;
+    const pct = Math.round((sent / items.length) * 100);
     const open = !state.collapsed.has(street.key);
     const cats = [...new Set(items.map((s) => s.category))].join('、');
     return `
@@ -204,7 +203,7 @@ function render() {
       <span class="street__cats">${escapeHtml(cats)}</span>
     </span>
     <span class="street__meta">
-      <span class="street__ratio">${contacted}/${items.length}</span>
+      <span class="street__ratio">${sent}/${items.length}</span>
       <span class="street__ring"><span style="width:${pct}%"></span></span>
     </span>
   </button>
@@ -241,10 +240,10 @@ function patchCard(store) {
   const section = card.closest('.street');
   if (section) {
     const cards = [...section.querySelectorAll('.store')];
-    const contacted = cards.filter((c) => c.dataset.status !== '未聯繫').length;
-    section.querySelector('.street__ratio').textContent = `${contacted}/${cards.length}`;
+    const sent = cards.filter((c) => c.dataset.status === '已發送').length;
+    section.querySelector('.street__ratio').textContent = `${sent}/${cards.length}`;
     section.querySelector('.street__ring > span').style.width =
-      `${Math.round((contacted / cards.length) * 100)}%`;
+      `${Math.round((sent / cards.length) * 100)}%`;
   }
   renderSummary();
 }

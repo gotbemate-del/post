@@ -23,8 +23,8 @@
 
   <div class="stats" id="stats" hidden>
     <div class="stat"><span class="stat__num" id="statTotal">–</span><span class="stat__label">店家總數</span></div>
-    <div class="stat"><span class="stat__num" id="statContacted">–</span><span class="stat__label">已聯繫</span></div>
-    <div class="stat"><span class="stat__num" id="statDone">–</span><span class="stat__label">已合作</span></div>
+    <div class="stat"><span class="stat__num" id="statSent">–</span><span class="stat__label">已發送</span></div>
+    <div class="stat"><span class="stat__num" id="statUnsent">–</span><span class="stat__label">未發送</span></div>
     <div class="stat"><span class="stat__num" id="statStreets">–</span><span class="stat__label">街道／地區</span></div>
   </div>
   <div class="progress" id="progressWrap" hidden>
@@ -44,12 +44,12 @@
   <div class="filters__row filters__row--selects">
     <label class="field"><span>鄉鎮市</span><select id="fTown"><option value="">全部</option></select></label>
     <label class="field"><span>分類</span><select id="fCategory"><option value="">全部</option></select></label>
-    <label class="field"><span>狀態</span><select id="fStatus"><option value="">全部</option></select></label>
+    <label class="field"><span>發送狀態</span><select id="fStatus"><option value="">全部</option></select></label>
     <label class="field"><span>街道</span><select id="fStreet"><option value="">全部</option></select></label>
   </div>
   <div class="filters__row filters__row--chips">
-    <label class="chip"><input type="checkbox" id="fPending"><span>只看未聯繫</span></label>
-    <label class="chip"><input type="checkbox" id="fSentOriginal"><span>只看原始已發送</span></label>
+    <label class="chip"><input type="checkbox" id="fPending"><span>只看未發送</span></label>
+    <label class="chip"><input type="checkbox" id="fSentOriginal"><span>只看原始底色標記</span></label>
     <span class="filters__count" id="resultCount"></span>
   </div>
 </nav>

@@ -17,8 +17,17 @@ const STORES_FILE = path.join(ROOT, 'data', 'stores.json');
 const DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(ROOT, 'data');
 const STATUS_FILE = path.join(DATA_DIR, 'status.json');
 
-export const STATUS_OPTIONS = ['未聯繫', '已發送', '已回覆', '已合作', '婉拒', '聯繫不上'];
+export const STATUS_OPTIONS = ['未發送', '已發送'];
 export const CHANNEL_OPTIONS = ['現場拜訪', '電話', 'LINE', 'Email', 'FB/IG 私訊'];
+
+/** 舊版的六段式狀態 → 現在的二元狀態。曾經寄出過的一律算「已發送」。 */
+const LEGACY_STATUS = {
+  未聯繫: '未發送',
+  已回覆: '已發送',
+  已合作: '已發送',
+  婉拒: '已發送',
+  聯繫不上: '已發送',
+};
 
 const catalog = JSON.parse(fs.readFileSync(STORES_FILE, 'utf8'));
 const storeIndex = new Map(catalog.stores.map((s) => [s.id, s]));
@@ -29,7 +38,13 @@ let writeTimer = null;
 function loadStatus() {
   try {
     const raw = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf8'));
-    return raw && typeof raw === 'object' ? raw : {};
+    if (!raw || typeof raw !== 'object') return {};
+    // 舊檔案可能還存著六段式狀態，讀進來就順手正規化
+    for (const record of Object.values(raw)) {
+      const mapped = LEGACY_STATUS[record?.status];
+      if (mapped) record.status = mapped;
+    }
+    return raw;
   } catch (err) {
     if (err.code !== 'ENOENT') {
       console.error(`[store] 無法讀取 ${STATUS_FILE}，改用空狀態：`, err.message);
@@ -57,7 +72,7 @@ function scheduleWrite() {
 /** 原始 Excel 有底色 = 已發送，作為沒有人工紀錄時的預設狀態。 */
 function defaultsFor(store) {
   return {
-    status: store.sent ? '已發送' : '未聯繫',
+    status: store.sent ? '已發送' : '未發送',
     contactedAt: '',
     channel: '',
     owner: '',
@@ -76,7 +91,7 @@ export function listStores() {
   return catalog.stores.map((s) => ({ ...s, ...defaultsFor(s), ...(status[s.id] ?? {}) }));
 }
 
-/** 街道分組加上「即時」的完成度統計（用目前狀態，而非 Excel 原始底色）。 */
+/** 街道分組加上「即時」的發送統計（用目前狀態，而非 Excel 原始底色）。 */
 export function listStreets(stores = listStores()) {
   const byId = new Map(stores.map((s) => [s.id, s]));
   return catalog.streets.map((street) => {
@@ -84,19 +99,20 @@ export function listStreets(stores = listStores()) {
     return {
       ...street,
       total: items.length,
-      sent: items.filter((s) => s.status !== '未聯繫').length,
-      done: items.filter((s) => s.status === '已合作').length,
+      sent: items.filter((s) => s.status === '已發送').length,
     };
   });
 }
 
 export function snapshot() {
   const stores = listStores();
+  const sent = stores.filter((s) => s.status === '已發送').length;
   return {
     summary: {
       ...catalog.summary,
-      contacted: stores.filter((s) => s.status !== '未聯繫').length,
-      done: stores.filter((s) => s.status === '已合作').length,
+      sentOriginal: catalog.summary.sent,   // 原始 Excel 底色標記的家數
+      sent,                                 // 目前實際的已發送家數
+      unsent: stores.length - sent,
     },
     streets: listStreets(stores),
     stores,
@@ -118,13 +134,13 @@ export function updateStore(id, patch) {
       throw new Error(`${field} 必須是字串`);
     }
     if (field === 'status' && value && !STATUS_OPTIONS.includes(value)) {
-      throw new Error(`聯繫狀態必須是：${STATUS_OPTIONS.join('、')}`);
+      throw new Error(`發送狀態必須是：${STATUS_OPTIONS.join('、')}`);
     }
     if (field === 'channel' && value && !CHANNEL_OPTIONS.includes(value)) {
-      throw new Error(`聯繫方式必須是：${CHANNEL_OPTIONS.join('、')}`);
+      throw new Error(`發送方式必須是：${CHANNEL_OPTIONS.join('、')}`);
     }
     if (field === 'contactedAt' && value && !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-      throw new Error('聯繫日期格式須為 YYYY-MM-DD');
+      throw new Error('發送日期格式須為 YYYY-MM-DD');
     }
     next[field] = value.slice(0, 500);
   }

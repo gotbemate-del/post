@@ -2,7 +2,7 @@
 """由 data/stores.json 產生「依街道分類」的確認表單 Excel。
 
 輸出三張分頁：
-  1. 街道總覽 — 每條街道的店家數、已發送數、完成率
+  1. 街道總覽 — 每條街道的店家數、已發送數、發送率
   2. 確認表單 — 主表，依街道分組列出所有店家與待填欄位
   3. 待補名單 — 原始檔「不再名單上新增的」分頁的手動補充項目
 
@@ -29,13 +29,13 @@ INPUT_FILL = PatternFill('solid', fgColor='FFFFFF00')      # 待填欄位
 THIN = Side(style='thin', color='FFBFBFBF')
 BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
 
-STATUS_OPTIONS = ['未聯繫', '已發送', '已回覆', '已合作', '婉拒', '聯繫不上']
+STATUS_OPTIONS = ['未發送', '已發送']
 CHANNEL_OPTIONS = ['', '現場拜訪', '電話', 'LINE', 'Email', 'FB/IG 私訊']
 
 FORM_HEADERS = [
     ('街道', 14), ('鄉鎮市', 10), ('分類', 12), ('店家名稱', 34), ('地址', 40),
     ('電話', 16), ('營業時間', 26), ('原始狀態', 10),
-    ('聯繫狀態', 12), ('聯繫日期', 12), ('聯繫方式', 12), ('負責人', 10),
+    ('發送狀態', 12), ('發送日期', 12), ('發送方式', 12), ('負責人', 10),
     ('回覆／備註', 30), ('連結', 34),
 ]
 
@@ -54,7 +54,7 @@ def style_header(ws, headers, row=1):
 def build_overview(wb, data):
     ws = wb.create_sheet('街道總覽')
     headers = [('鄉鎮市', 12), ('街道／地區', 18), ('店家數', 10),
-               ('已發送', 10), ('未發送', 10), ('完成率', 12)]
+               ('已發送', 10), ('未發送', 10), ('發送率', 12)]
 
     ws['A1'] = '澎湖店家確認表單 — 街道總覽'
     ws['A1'].font = Font(name=FONT, bold=True, size=14)
@@ -136,7 +136,7 @@ def build_form(wb, data):
             values = [
                 st['street'], st['town'], store['category'], store['name'], store['address'],
                 store['phone'], store['hours'], '已發送' if store['sent'] else '未發送',
-                '已發送' if store['sent'] else '未聯繫', None, None, None, note, store['link'],
+                '已發送' if store['sent'] else '未發送', None, None, None, note, store['link'],
             ]
             for idx, value in enumerate(values, start=1):
                 cell = ws.cell(row, idx, value)
@@ -181,9 +181,8 @@ def build_form(wb, data):
     for part in sqref('K'):
         channel_dv.add(part)
 
-    for value, fill_color, font_color in (('已合作', 'FFC6EFCE', 'FF006100'),
-                                          ('婉拒', 'FFFFC7CE', 'FF9C0006'),
-                                          ('聯繫不上', 'FFF2F2F2', 'FF808080')):
+    for value, fill_color, font_color in (('已發送', 'FFC6EFCE', 'FF006100'),
+                                          ('未發送', 'FFF2F2F2', 'FF808080')):
         ws.conditional_formatting.add(
             ' '.join(status_ranges),
             CellIsRule(operator='equal', formula=[f'"{value}"'],
@@ -202,7 +201,7 @@ def build_extras(wb, data):
     ws['A2'].font = Font(name=FONT, size=10, color='FF595959')
 
     headers = [('批次', 26), ('店家（原始文字）', 34), ('地址（待補）', 40),
-               ('電話（待補）', 18), ('聯繫狀態', 12), ('備註', 26)]
+               ('電話（待補）', 18), ('發送狀態', 12), ('備註', 26)]
     style_header(ws, headers, row=4)
 
     row = 5
