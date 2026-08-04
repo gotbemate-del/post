@@ -99,16 +99,28 @@ function shortDate(isoDate) {
   return `${Number(month)}/${Number(day)}`;
 }
 
-/** 打勾時間顯示成台灣時間；沒有時戳但原始名單有底色的，標成「原始名單標記」。 */
+/** ISO 時戳 → 台灣時間的 2026/08/04 14:15。 */
+function taipeiTime(iso) {
+  const at = new Date(iso);
+  return Number.isNaN(at.getTime()) ? '' : at.toLocaleString('zh-TW', {
+    timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  });
+}
+
+/** 打勾時間；沒有時戳但原始名單有底色的，標成「原始名單標記」。 */
 function sentAtLabel(store) {
   if (!isHandled(store.status)) return '';
   if (!store.sentAt) return store.sent ? '🕒 原始名單標記' : '';
-  const at = new Date(store.sentAt);
-  if (Number.isNaN(at.getTime())) return '';
-  return `🕒 ${at.toLocaleString('zh-TW', {
-    timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', hour12: false,
-  })}`;
+  const at = taipeiTime(store.sentAt);
+  return at ? `🕒 發送 ${at}` : '';
+}
+
+/** 新增的店家額外顯示是什麼時候加進來的。 */
+function addedAtLabel(store) {
+  if (!store.isAddition || !store.createdAt) return '';
+  const at = taipeiTime(store.createdAt);
+  return at ? `🆕 新增 ${at}` : '';
 }
 
 function fillSelect(select, values, placeholder) {
@@ -260,6 +272,7 @@ function storeCard(store) {
     ${store.hours ? `<span>🕘 ${escapeHtml(store.hours)}</span>` : ''}
     ${store.note ? `<span>📝 ${escapeHtml(store.note)}</span>` : ''}
     <span class="store__sentat" data-role="sentat">${escapeHtml(sentAtLabel(store))}</span>
+    <span class="store__addedat">${escapeHtml(addedAtLabel(store))}</span>
   </div>
   <div class="store__actions">
     ${url ? `<a class="linkbtn" href="${escapeAttr(url)}" target="_blank" rel="noopener">官網／粉專</a>` : ''}

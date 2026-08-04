@@ -46,16 +46,19 @@ function telHref(phone) {
   return digits.length >= 6 ? `tel:${digits}` : '';
 }
 
-/** 打勾時間顯示成台灣時間。 */
-function sentAtLabel(record) {
-  if (!record.sentAt) return '';
-  const at = new Date(record.sentAt);
-  if (Number.isNaN(at.getTime())) return '';
-  return `🕒 ${at.toLocaleString('zh-TW', {
+/** ISO 時戳 → 台灣時間的 2026/08/04 14:15。 */
+function taipeiTime(iso) {
+  const at = new Date(iso);
+  return Number.isNaN(at.getTime()) ? '' : at.toLocaleString('zh-TW', {
     timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', hour12: false,
-  })}`;
+  });
 }
+
+const sentAtLabel = (record) =>
+  (record.sentAt && taipeiTime(record.sentAt) ? `🕒 發送 ${taipeiTime(record.sentAt)}` : '');
+const addedAtLabel = (record) =>
+  (record.createdAt && taipeiTime(record.createdAt) ? `🆕 新增 ${taipeiTime(record.createdAt)}` : '');
 
 async function api(url, options) {
   const res = await fetch(url, options);
@@ -85,10 +88,12 @@ function card(record) {
 
   // 地址／電話都空的時候整塊不要輸出，否則會留下一段空白
   const sentAt = sentAtLabel(record);
+  const addedAt = addedAtLabel(record);
   const meta = [
     record.address ? `<span>📍 ${escapeHtml(record.address)}</span>` : '',
     record.phone ? `<span>📞 ${tel ? `<a href="${escapeAttr(tel)}">${escapeHtml(record.phone)}</a>` : escapeHtml(record.phone)}</span>` : '',
     sentAt ? `<span class="store__sentat">${escapeHtml(sentAt)}</span>` : '',
+    addedAt ? `<span class="store__addedat">${escapeHtml(addedAt)}</span>` : '',
   ].join('');
   const actions = [
     record.address ? `<a class="linkbtn" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(record.address)}" target="_blank" rel="noopener">地圖</a>` : '',
