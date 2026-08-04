@@ -112,6 +112,33 @@ input:focus, select:focus, textarea:focus {
 }
 .btn:hover { background: #f0f3f9; }
 .btn--ghost { color: var(--navy); font-weight: 600; }
+.btn--primary { background: var(--navy); border-color: var(--navy); color: #fff; font-weight: 600; }
+.btn--primary:hover { background: var(--navy-soft); }
+.btn--primary:disabled { opacity: .55; cursor: progress; }
+
+/* --------------------------------------------------- 頁面切換 / 新增家數表單 */
+
+.pagenav { margin-top: 10px; display: flex; gap: 10px; }
+.pagenav a {
+  font-size: .76rem; font-weight: 600; color: #fff; text-decoration: none;
+  padding: 5px 11px; border-radius: 999px;
+  background: rgba(255, 255, 255, .16); border: 1px solid rgba(255, 255, 255, .26);
+}
+.pagenav a:hover { background: rgba(255, 255, 255, .26); }
+
+.addbox { background: var(--card); border-bottom: 1px solid var(--line); padding: 12px 16px; }
+.addbox__title { margin: 0 0 10px; font-size: .85rem; color: var(--navy); }
+.addbox__form { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.field--wide { grid-column: 1 / -1; }
+.addbox__actions { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.addbox__hint { font-size: .7rem; color: var(--muted); }
+
+.iconbtn {
+  margin-left: auto; flex: none; font: inherit; font-size: .8rem; line-height: 1;
+  width: 26px; height: 26px; border-radius: 7px; cursor: pointer;
+  border: 1px solid var(--line); background: #fff; color: var(--muted);
+}
+.iconbtn:hover { background: #fbe6e6; border-color: #f0c2c2; color: #92302f; }
 
 /* ------------------------------------------------------------------ 街道區塊 */
 
@@ -205,6 +232,9 @@ input:focus, select:focus, textarea:focus {
   .stat__label { font-size: .72rem; }
   .filters { padding: 12px 24px; grid-template-columns: 1fr; }
   .filters__row--selects { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .addbox { padding: 14px 24px; }
+  .addbox__form { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .field--wide { grid-column: span 2; }
   .main { padding: 16px 24px 48px; }
   .street__body { grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); padding: 10px 12px 14px; }
   .extras { padding: 0 24px 56px; }
@@ -213,6 +243,7 @@ input:focus, select:focus, textarea:focus {
 @media (min-width: 1100px) {
   .topbar__inner, .stats, .progress { max-width: 1240px; margin-inline: auto; }
   .filters { padding-inline: max(24px, calc((100% - 1240px) / 2)); }
+  .addbox { padding-inline: max(24px, calc((100% - 1240px) / 2)); }
   .main, .extras { padding-inline: max(24px, calc((100% - 1240px) / 2)); }
   .street__body { grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); }
 }

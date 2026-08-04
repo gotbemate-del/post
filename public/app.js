@@ -134,9 +134,6 @@ function storeCard(store) {
   const statusOptions = state.options.status
     .map((v) => `<option value="${escapeAttr(v)}"${v === store.status ? ' selected' : ''}>${escapeHtml(v)}</option>`)
     .join('');
-  const channelOptions = ['', ...state.options.channel]
-    .map((v) => `<option value="${escapeAttr(v)}"${v === store.channel ? ' selected' : ''}>${escapeHtml(v || '—')}</option>`)
-    .join('');
 
   return `
 <article class="store" data-id="${escapeAttr(store.id)}" data-sent="${store.sent}" data-status="${escapeAttr(store.status)}">
@@ -160,13 +157,7 @@ function storeCard(store) {
   <div class="store__form">
     <div class="store__form-row">
       <label>發送狀態<select data-field="status">${statusOptions}</select></label>
-      <label>發送日期<input type="date" data-field="contactedAt" value="${escapeAttr(store.contactedAt || '')}"></label>
     </div>
-    <div class="store__form-row">
-      <label>發送方式<select data-field="channel">${channelOptions}</select></label>
-      <label>負責人<input type="text" data-field="owner" value="${escapeAttr(store.owner || '')}" placeholder="姓名"></label>
-    </div>
-    <label>回覆／備註<textarea data-field="reply" rows="2" placeholder="店家回覆、後續待辦…">${escapeHtml(store.reply || '')}</textarea></label>
     <span class="store__saved" data-role="saved"></span>
   </div>
 </article>`;

@@ -2,6 +2,10 @@ import path from 'node:path';
 
 import express from 'express';
 
+import {
+  additionsFilePath, createAddition, removeAddition,
+  snapshot as additionsSnapshot, updateAddition,
+} from './additions.js';
 import { getStore, snapshot, statusFilePath, updateStore } from './store.js';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -63,8 +67,51 @@ app.patch('/api/stores/:id', (req, res) => {
   }
 });
 
+/* ------------------------------------------------------- 新增家數（額外名單） */
+
+/** 新增名單筆數不多，改動就整包廣播，前端不必自己合併。 */
+function broadcastAdditions() {
+  broadcast('additions:update', additionsSnapshot());
+}
+
+app.get('/api/additions', (req, res) => {
+  res.json(additionsSnapshot());
+});
+
+app.post('/api/additions', (req, res) => {
+  try {
+    const record = createAddition(req.body ?? {});
+    broadcastAdditions();
+    res.status(201).json(record);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.patch('/api/additions/:id', (req, res) => {
+  try {
+    const record = updateAddition(req.params.id, req.body ?? {});
+    if (!record) return res.status(404).json({ error: '查無此新增店家' });
+    broadcastAdditions();
+    res.json(record);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.delete('/api/additions/:id', (req, res) => {
+  if (!removeAddition(req.params.id)) return res.status(404).json({ error: '查無此新增店家' });
+  broadcastAdditions();
+  res.status(204).end();
+});
+
 app.get('/healthz', (req, res) => {
-  res.json({ ok: true, clients: clients.size, statusFile: statusFilePath() });
+  res.json({
+    ok: true,
+    clients: clients.size,
+    statusFile: statusFilePath(),
+    additionsFile: additionsFilePath(),
+  });
 });
 
 app.listen(PORT, () => {

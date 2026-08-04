@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { makeWriter, readJson } from './jsonfile.js';
+
 /**
  * 店家狀態儲存層。
  *
@@ -14,7 +16,7 @@ import path from 'node:path';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const STORES_FILE = path.join(ROOT, 'data', 'stores.json');
-const DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(ROOT, 'data');
+export const DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(ROOT, 'data');
 const STATUS_FILE = path.join(DATA_DIR, 'status.json');
 
 export const STATUS_OPTIONS = ['未發送', '已發送'];
@@ -32,41 +34,17 @@ const LEGACY_STATUS = {
 const catalog = JSON.parse(fs.readFileSync(STORES_FILE, 'utf8'));
 const storeIndex = new Map(catalog.stores.map((s) => [s.id, s]));
 
-let status = loadStatus();
-let writeTimer = null;
+const status = loadStatus();
+const scheduleWrite = makeWriter(STATUS_FILE, () => status);
 
 function loadStatus() {
-  try {
-    const raw = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf8'));
-    if (!raw || typeof raw !== 'object') return {};
-    // 舊檔案可能還存著六段式狀態，讀進來就順手正規化
-    for (const record of Object.values(raw)) {
-      const mapped = LEGACY_STATUS[record?.status];
-      if (mapped) record.status = mapped;
-    }
-    return raw;
-  } catch (err) {
-    if (err.code !== 'ENOENT') {
-      console.error(`[store] 無法讀取 ${STATUS_FILE}，改用空狀態：`, err.message);
-    }
-    return {};
+  const raw = readJson(STATUS_FILE, {});
+  // 舊檔案可能還存著六段式狀態，讀進來就順手正規化
+  for (const record of Object.values(raw)) {
+    const mapped = LEGACY_STATUS[record?.status];
+    if (mapped) record.status = mapped;
   }
-}
-
-/** 合併多次快速編輯，避免每敲一個字就寫一次磁碟。 */
-function scheduleWrite() {
-  if (writeTimer) return;
-  writeTimer = setTimeout(() => {
-    writeTimer = null;
-    try {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-      const tmp = `${STATUS_FILE}.tmp`;
-      fs.writeFileSync(tmp, JSON.stringify(status, null, 1), 'utf8');
-      fs.renameSync(tmp, STATUS_FILE);   // 原子寫入，避免中途中斷留下半個檔案
-    } catch (err) {
-      console.error('[store] 寫入狀態失敗：', err.message);
-    }
-  }, 300);
+  return raw;
 }
 
 /** 原始 Excel 有底色 = 已發送，作為沒有人工紀錄時的預設狀態。 */
@@ -153,4 +131,12 @@ export function updateStore(id, patch) {
 
 export function statusFilePath() {
   return STATUS_FILE;
+}
+
+/** 原始名單裡出現過的鄉鎮市／街道，給「新增家數」頁的下拉選單用。 */
+export function streetOptions() {
+  return {
+    towns: [...new Set(catalog.streets.map((s) => s.town))],
+    streets: catalog.streets.map(({ town, street }) => ({ town, street })),
+  };
 }

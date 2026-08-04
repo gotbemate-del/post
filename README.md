@@ -15,7 +15,7 @@
 | `data/stores.json` | 解析後的結構化資料，網站與 Excel 表單共用同一份 |
 | `scripts/parse_xlsx.py` | 原始 Excel → `data/stores.json` |
 | `scripts/build_form_xlsx.py` | `data/stores.json` → 確認表單 Excel |
-| `src/`、`public/` | Node + Express 網站（API、SSE 即時同步、前端） |
+| `src/`、`public/` | Node + Express 網站（原始名單頁 `/`、新增家數頁 `/new`、API、SSE 即時同步） |
 
 ## 街道分類怎麼做的
 
@@ -56,8 +56,9 @@ npm start                            # http://localhost:3000
 | Region | Singapore |
 | Disk | 無 |
 
-**⚠️ free 方案的填寫紀錄不會保留。** 聯繫狀態存在 `data/status.json`，而 free 方案的檔案系統
-是暫時的——服務休眠重啟或重新部署後，所有人填的內容都會歸零、退回 Excel 的初始狀態。
+**⚠️ free 方案的填寫紀錄不會保留。** 發送狀態存在 `data/status.json`、新增的店家存在
+`data/additions.json`，而 free 方案的檔案系統是暫時的——服務休眠重啟或重新部署後，所有人填的
+內容和新增的店家都會消失、退回 Excel 的初始狀態。
 
 要長期保留紀錄，把 `render.yaml` 改成 Starter 以上並掛 Persistent Disk（free 不支援）：
 
@@ -76,23 +77,47 @@ Render 的免費／Starter 方案在閒置後會休眠，第一次開啟頁面�
 
 ## 網站功能
 
+網站有兩頁，頂端可互相切換：
+
+### `/` 原始名單
+
 - **街道索引**：預設收合，一眼看完 92 條街道的進度（`已發送/總數` + 進度條），點開才看店家
 - **即時同步**：任何人改動狀態，其他裝置透過 SSE 立刻更新，不需重新整理；右上角顯示連線狀態
-- **篩選**：關鍵字（店名／地址／電話／負責人／備註）、鄉鎮市、分類、發送狀態、街道、只看未發送、只看原始底色標記
-- **每家店可填**：發送狀態（**只有未發送／已發送兩種**）、發送日期、
-  發送方式、負責人、回覆備註；輸入即自動儲存
+- **篩選**：關鍵字（店名／地址／電話／備註）、鄉鎮市、分類、發送狀態、街道、只看未發送、只看原始底色標記
+- **每家店可改**：發送狀態，**只有未發送／已發送兩種**，選了就自動儲存
 - **快捷操作**：一鍵撥號、Google 地圖導航、開啟官網／粉專
-- 手機優先設計，平板／桌機自動變成多欄
+
+### `/new` 新增家數
+
+原始名單以外、在外面跑的時候現場加進來的店家。
+
+- 填店名（必填）、鄉鎮市、街道、地址、電話、發送狀態即可新增
+- **街道可以直接打新的**，不限於原始名單的 92 條；沒填街道會歸到「未分類」
+- 一樣依「鄉鎮市 · 街道」分區，每區顯示 `已發送/家數`，頂端顯示新增總數
+- 連續新增同一條街上的店家時，鄉鎮市／街道會留著不清空
+- 可以改狀態、刪除；一樣即時同步到其他裝置
+
+手機優先設計，平板／桌機自動變成多欄。
+
+**新增的店家和原始名單是分開存的**（`$DATA_DIR/additions.json`），因為 `data/stores.json`
+是 Excel 產生的唯讀資料，重新匯入名單時不能被新增的內容蓋掉。
 
 ## API
 
 | 方法 | 路徑 | 說明 |
 | --- | --- | --- |
-| `GET` | `/api/data` | 完整快照（店家、街道分組、統計、下拉選項） |
+| `GET` | `/api/data` | 原始名單完整快照（店家、街道分組、統計、下拉選項） |
 | `GET` | `/api/stores/:id` | 單一店家 |
 | `PATCH` | `/api/stores/:id` | 更新 `status` / `contactedAt` / `channel` / `owner` / `reply` |
-| `GET` | `/api/events` | SSE 事件串流，事件名 `store:update` |
+| `GET` | `/api/additions` | 新增名單快照（依街道分區的 `groups`、`summary`、下拉選項） |
+| `POST` | `/api/additions` | 新增一家（`name` 必填，另可帶 `address` / `phone` / `town` / `street` / `status`） |
+| `PATCH` | `/api/additions/:id` | 更新新增的店家，欄位同上 |
+| `DELETE` | `/api/additions/:id` | 刪除新增的店家 |
+| `GET` | `/api/events` | SSE 事件串流，事件名 `store:update`、`additions:update` |
 | `GET` | `/healthz` | 健康檢查 |
+
+`PATCH /api/stores/:id` 的 `contactedAt` / `channel` / `owner` / `reply` 目前**在網頁上是隱藏的**
+（卡片只留發送狀態），但 API 與資料結構都還在，要恢復顯示只需改 `public/app.js` 的 `storeCard()`。
 
 ## 更新名單
 
