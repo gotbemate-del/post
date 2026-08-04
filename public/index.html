@@ -27,6 +27,7 @@
 
   <div class="stats" id="stats" hidden>
     <div class="stat"><span class="stat__num" id="statTotal">–</span><span class="stat__label">店家總數</span></div>
+    <div class="stat"><span class="stat__num" id="statAdded">–</span><span class="stat__label">已新增</span></div>
     <div class="stat"><span class="stat__num" id="statSent">–</span><span class="stat__label">已發送</span></div>
     <div class="stat"><span class="stat__num" id="statPosted">–</span><span class="stat__label">已張貼</span></div>
     <div class="stat"><span class="stat__num" id="statUnsent">–</span><span class="stat__label">未發送</span></div>
@@ -45,6 +46,7 @@
       <input type="search" id="q" placeholder="搜尋店名、地址、電話…" autocomplete="off">
     </label>
     <button type="button" class="btn btn--ghost" id="toggleAll">全部展開</button>
+    <button type="button" class="btn btn--primary" id="toggleAdd" aria-expanded="false">➕ 新增店家</button>
   </div>
   <div class="filters__row filters__row--selects">
     <label class="field"><span>鄉鎮市</span><select id="fTown"><option value="">全部</option></select></label>
@@ -58,6 +60,42 @@
     <span class="filters__count" id="resultCount"></span>
   </div>
 </nav>
+
+<section class="addbox" id="addbox" hidden>
+  <h2 class="addbox__title">新增不在名單上的店家</h2>
+  <form id="addForm" class="addbox__form" autocomplete="off">
+    <label class="field field--wide">
+      <span>店家名稱 <b>*</b></span>
+      <input type="text" name="name" required maxlength="200" placeholder="例：阿婆的店">
+    </label>
+    <label class="field">
+      <span>鄉鎮市</span>
+      <input type="text" name="town" list="townList" maxlength="40" placeholder="馬公市">
+    </label>
+    <label class="field">
+      <span>街道／地區</span>
+      <input type="text" name="street" list="streetList" maxlength="60" placeholder="中正路">
+    </label>
+    <label class="field field--wide">
+      <span>地址</span>
+      <input type="text" name="address" maxlength="500" placeholder="880澎湖縣馬公市…">
+    </label>
+    <label class="field">
+      <span>電話</span>
+      <input type="tel" name="phone" maxlength="60" placeholder="06-9271234">
+    </label>
+    <label class="field">
+      <span>發送狀態</span>
+      <select name="status" id="addStatus"></select>
+    </label>
+    <div class="addbox__actions">
+      <button type="submit" class="btn btn--primary" id="addBtn">新增</button>
+      <span class="addbox__hint">新增的店家會直接出現在對應的街道分區裡，街道可以直接打新的。</span>
+    </div>
+  </form>
+  <datalist id="townList"></datalist>
+  <datalist id="streetList"></datalist>
+</section>
 
 <main id="main" class="main">
   <p class="placeholder" id="placeholder">載入名單中…</p>

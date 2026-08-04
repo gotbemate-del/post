@@ -56,7 +56,7 @@ body {
 .conn[data-state="offline"] .conn__dot { background: #ff9c8f; }
 
 .stats {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(62px, 1fr));
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(54px, 1fr));
   gap: 6px; margin-top: 12px;
 }
 .stat {
@@ -180,6 +180,7 @@ input:focus, select:focus, textarea:focus {
   background: #eef2fa; color: var(--navy); font-weight: 600; white-space: nowrap; flex: none;
 }
 .tag--dup { background: #fdeee6; color: #a5561f; }
+.tag--new { background: #e7edfb; color: var(--navy-soft); }
 .tag--status { background: #eceff5; color: var(--muted); }
 .tag--status[data-v="已發送"] { background: #fdf3d9; color: #86651c; }
 .tag--status[data-v="已張貼"] { background: #e2f5ee; color: #0a6a51; }

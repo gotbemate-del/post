@@ -8,6 +8,7 @@ const state = {
   stores: [],
   streets: [],
   extras: [],
+  additions: [],          // 不在原始名單上、在網站上新增的店家
   options: { status: [], channel: [] },
   byId: new Map(),
   collapsed: new Set(),   // 收合中的街道 key；預設全部收合，當成街道索引使用
@@ -24,7 +25,12 @@ const dom = {
   fStreet: el('fStreet'), fPending: el('fPending'), fSentOriginal: el('fSentOriginal'),
   resultCount: el('resultCount'), toggleAll: el('toggleAll'),
   extrasSection: el('extrasSection'), extrasGrid: el('extrasGrid'),
+  toggleAdd: el('toggleAdd'), addbox: el('addbox'), addForm: el('addForm'),
+  addBtn: el('addBtn'), addStatus: el('addStatus'),
+  townList: el('townList'), streetList: el('streetList'),
 };
+
+const ADDED_CATEGORY = '新增';
 
 /* ------------------------------------------------------------------ 工具 */
 
@@ -104,29 +110,60 @@ function matches(store, f) {
   if (f.pending && store.status !== '未發送') return false;
   if (f.sentOriginal && !store.sent) return false;
   if (f.q) {
-    const hay = `${store.name} ${store.address} ${store.phone} ${store.owner} ${store.reply} ${store.street}`.toLowerCase();
+    const hay = [store.name, store.address, store.phone, store.owner, store.reply, store.street]
+      .filter(Boolean).join(' ').toLowerCase();
     if (!hay.includes(f.q)) return false;
   }
   return true;
 }
 
+/** 原始名單 + 新增店家，依街道 key 併成同一份分區資料。 */
+function sectionsWithAdditions() {
+  const added = new Map();
+  for (const record of state.additions) {
+    const key = `${record.town}|${record.street}`;
+    if (!added.has(key)) added.set(key, []);
+    added.get(key).push(record);
+  }
+
+  const sections = state.streets.map((street) => ({
+    ...street,
+    items: [
+      ...street.store_ids.map((id) => state.byId.get(id)).filter(Boolean),
+      ...(added.get(street.key) ?? []),
+    ],
+  }));
+
+  // 新增到原始名單沒有的街道，另外補成新的分區排在後面
+  const known = new Set(state.streets.map((s) => s.key));
+  for (const [key, items] of added) {
+    if (known.has(key)) continue;
+    const [town, street] = key.split('|');
+    sections.push({ key, town, street, items });
+  }
+  return sections;
+}
+
 /* ------------------------------------------------------------------ 渲染 */
 
 function renderSummary() {
-  const total = state.stores.length;
-  const sent = state.stores.filter((s) => s.status === '已發送').length;
-  const posted = state.stores.filter((s) => s.status === '已張貼').length;
+  // 進度以「原始名單 + 新增店家」為母數，新增的店家一樣要跑
+  const all = [...state.stores, ...state.additions];
+  const sent = all.filter((s) => s.status === '已發送').length;
+  const posted = all.filter((s) => s.status === '已張貼').length;
   const handled = sent + posted;
 
-  el('statTotal').textContent = total;
+  el('statTotal').textContent = state.stores.length;
+  el('statAdded').textContent = state.additions.length;
   el('statSent').textContent = sent;
   el('statPosted').textContent = posted;
-  el('statUnsent').textContent = total - handled;
-  el('statStreets').textContent = state.streets.length;
+  el('statUnsent').textContent = all.length - handled;
+  // 新增到原始名單沒有的街道時，分區數會比原本的 92 條多
+  el('statStreets').textContent = sectionsWithAdditions().length;
 
-  const pct = total ? Math.round((handled / total) * 100) : 0;
+  const pct = all.length ? Math.round((handled / all.length) * 100) : 0;
   dom.progressFill.style.width = `${pct}%`;
-  dom.progressText.textContent = `${handled}/${total} 已處理（${pct}%）`;
+  dom.progressText.textContent = `${handled}/${all.length} 已處理（${pct}%）`;
   dom.stats.hidden = false;
   dom.progressWrap.hidden = false;
 }
@@ -141,13 +178,16 @@ function storeCard(store) {
     .map((v) => `<option value="${escapeAttr(v)}"${v === store.status ? ' selected' : ''}>${escapeHtml(v)}</option>`)
     .join('');
 
+  const added = store.isAddition === true;
+
   return `
-<article class="store" data-id="${escapeAttr(store.id)}" data-sent="${store.sent}" data-status="${escapeAttr(store.status)}">
+<article class="store" data-id="${escapeAttr(store.id)}" data-sent="${Boolean(store.sent)}" data-status="${escapeAttr(store.status)}"${added ? ' data-addition="true"' : ''}>
   <div class="store__head">
     <h3 class="store__name">${escapeHtml(store.name)}</h3>
-    <span class="tag">${escapeHtml(store.category)}</span>
+    <span class="tag${added ? ' tag--new' : ''}">${escapeHtml(store.category)}</span>
     <span class="tag tag--status" data-v="${escapeAttr(store.status)}">${escapeHtml(store.status)}</span>
     ${dup}
+    ${added ? '<button type="button" class="iconbtn" data-action="remove" title="刪除這筆新增">✕</button>' : ''}
   </div>
   <div class="store__meta">
     <span>📍 ${escapeHtml(store.address || '（未填地址）')}</span>
@@ -171,21 +211,23 @@ function storeCard(store) {
 
 function render() {
   const f = activeFilters();
+  const sections = sectionsWithAdditions();
 
   // 有篩選條件時自動展開命中的街道，清掉條件後回到收合的索引狀態
   const filtering = isFiltering(f);
   if (filtering !== state.filtering) {
     state.filtering = filtering;
     state.allCollapsed = !filtering;
-    state.collapsed = filtering ? new Set() : new Set(state.streets.map((s) => s.key));
+    state.collapsed = filtering ? new Set() : new Set(sections.map((s) => s.key));
     dom.toggleAll.textContent = filtering ? '全部收合' : '全部展開';
   }
 
-  const visible = new Set(state.stores.filter((s) => matches(s, f)).map((s) => s.id));
+  const visible = new Set(
+    [...state.stores, ...state.additions].filter((s) => matches(s, f)).map((s) => s.id));
   dom.resultCount.textContent = `符合 ${visible.size} 家`;
 
-  const html = state.streets.map((street) => {
-    const items = street.store_ids.map((id) => state.byId.get(id)).filter((s) => s && visible.has(s.id));
+  const html = sections.map((street) => {
+    const items = street.items.filter((s) => visible.has(s.id));
     if (!items.length) return '';
     const handled = items.filter((s) => isHandled(s.status)).length;
     const pct = Math.round((handled / items.length) * 100);
@@ -291,22 +333,57 @@ function applyStore(store) {
 
 /* ------------------------------------------------------------------ 事件 */
 
-dom.main.addEventListener('click', (event) => {
+dom.main.addEventListener('click', async (event) => {
   const head = event.target.closest('.street__head');
-  if (!head) return;
-  const section = head.closest('.street');
-  const key = section.dataset.key;
-  const open = section.dataset.open === 'true';
-  section.dataset.open = String(!open);
-  head.setAttribute('aria-expanded', String(!open));
-  if (open) state.collapsed.add(key); else state.collapsed.delete(key);
+  if (head) {
+    const section = head.closest('.street');
+    const key = section.dataset.key;
+    const open = section.dataset.open === 'true';
+    section.dataset.open = String(!open);
+    head.setAttribute('aria-expanded', String(!open));
+    if (open) state.collapsed.add(key); else state.collapsed.delete(key);
+    return;
+  }
+
+  const remove = event.target.closest('[data-action="remove"]');
+  if (!remove) return;
+  const card = remove.closest('.store');
+  const name = card.querySelector('.store__name').textContent;
+  if (!confirm(`確定要刪除新增的「${name}」？這筆紀錄會直接消失。`)) return;
+  try {
+    const res = await fetch(`/api/additions/${encodeURIComponent(card.dataset.id)}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
+    toast(`已刪除「${name}」`);
+    await reloadAdditions();
+    render();
+  } catch (err) {
+    toast(`刪除失敗：${err.message}`, 'error');
+  }
 });
 
-dom.main.addEventListener('change', (event) => {
+dom.main.addEventListener('change', async (event) => {
   const input = event.target.closest('[data-field]');
   if (!input) return;
   const card = input.closest('.store');
   const savedEl = card.querySelector('[data-role="saved"]');
+
+  // 新增的店家走另一組 API，改完重抓一次就好（筆數少，不必逐筆合併）
+  if (card.dataset.addition === 'true') {
+    try {
+      const res = await fetch(`/api/additions/${encodeURIComponent(card.dataset.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [input.dataset.field]: input.value }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
+      await reloadAdditions();
+      render();
+    } catch (err) {
+      toast(`儲存失敗：${err.message}`, 'error');
+    }
+    return;
+  }
+
   save(card.dataset.id, { [input.dataset.field]: input.value }, savedEl);
 });
 
@@ -327,9 +404,48 @@ for (const control of [dom.fTown, dom.fCategory, dom.fStatus, dom.fStreet, dom.f
 
 dom.toggleAll.addEventListener('click', () => {
   state.allCollapsed = !state.allCollapsed;
-  state.collapsed = state.allCollapsed ? new Set(state.streets.map((s) => s.key)) : new Set();
+  state.collapsed = state.allCollapsed
+    ? new Set(sectionsWithAdditions().map((s) => s.key)) : new Set();
   dom.toggleAll.textContent = state.allCollapsed ? '全部展開' : '全部收合';
   render();
+});
+
+/* -------------------------------------------------------------- 新增店家 */
+
+dom.toggleAdd.addEventListener('click', () => {
+  const open = dom.addbox.hidden;
+  dom.addbox.hidden = !open;
+  dom.toggleAdd.setAttribute('aria-expanded', String(open));
+  dom.toggleAdd.textContent = open ? '✕ 收起新增' : '➕ 新增店家';
+  if (open) dom.addForm.elements.name.focus();
+});
+
+dom.addForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const body = Object.fromEntries(new FormData(dom.addForm));
+  if (!body.name.trim()) { toast('店家名稱是必填的', 'error'); return; }
+
+  dom.addBtn.disabled = true;
+  try {
+    const res = await fetch('/api/additions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
+    const record = await res.json();
+    // 街道／鄉鎮市留著不清，方便連續加同一條街上的店家
+    for (const field of ['name', 'address', 'phone']) dom.addForm.elements[field].value = '';
+    dom.addForm.elements.name.focus();
+    await reloadAdditions();
+    state.collapsed.delete(`${record.town}|${record.street}`);   // 展開剛加進去的那一區
+    render();
+    toast(`已新增「${record.name}」`);
+  } catch (err) {
+    toast(`新增失敗：${err.message}`, 'error');
+  } finally {
+    dom.addBtn.disabled = false;
+  }
 });
 
 /* ------------------------------------------------------------------ 啟動 */
@@ -342,12 +458,32 @@ function ingest(data) {
   state.byId = new Map(state.stores.map((s) => [s.id, s]));
 }
 
+/** 新增的店家補上主名單卡片需要的欄位，之後就能和原始店家走同一套渲染／篩選。 */
+function ingestAdditions(data) {
+  state.additions = (data.groups ?? []).flatMap((group) => group.items)
+    .map((record) => ({ ...record, isAddition: true, category: ADDED_CATEGORY, sent: false }));
+}
+
+async function reloadAdditions() {
+  const res = await fetch('/api/additions');
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  ingestAdditions(await res.json());
+}
+
 function buildFilterOptions() {
   const uniq = (values) => [...new Set(values.filter(Boolean))];
   fillSelect(dom.fTown, uniq(state.stores.map((s) => s.town)), '全部');
-  fillSelect(dom.fCategory, uniq(state.stores.map((s) => s.category)), '全部');
+  fillSelect(dom.fCategory, [...uniq(state.stores.map((s) => s.category)), ADDED_CATEGORY], '全部');
   fillSelect(dom.fStatus, state.options.status, '全部');
   fillSelect(dom.fStreet, uniq(state.streets.map((s) => s.street)).sort((a, b) => a.localeCompare(b, 'zh-Hant')), '全部');
+
+  dom.addStatus.innerHTML = state.options.status
+    .map((v) => `<option value="${escapeAttr(v)}">${escapeHtml(v)}</option>`).join('');
+  dom.townList.innerHTML = uniq(state.stores.map((s) => s.town))
+    .map((v) => `<option value="${escapeAttr(v)}"></option>`).join('');
+  dom.streetList.innerHTML = uniq(state.streets.map((s) => s.street))
+    .sort((a, b) => a.localeCompare(b, 'zh-Hant'))
+    .map((v) => `<option value="${escapeAttr(v)}"></option>`).join('');
 }
 
 function connect() {
@@ -359,20 +495,27 @@ function connect() {
     // 自己送出的更新已在本地套用過，這裡只補上其他裝置的異動
     if (!pending.has(store.id)) applyStore(store);
   });
+  source.addEventListener('additions:update', (event) => {
+    ingestAdditions(JSON.parse(event.data));
+    render();
+  });
 }
 
 async function init() {
   try {
-    const res = await fetch('/api/data');
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    ingest(await res.json());
+    const [data, additions] = await Promise.all([
+      fetch('/api/data').then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }),
+      fetch('/api/additions').then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }),
+    ]);
+    ingest(data);
+    ingestAdditions(additions);
   } catch (err) {
     dom.placeholder.textContent = `載入失敗：${err.message}`;
     setConn('offline', '離線');
     return;
   }
   buildFilterOptions();
-  state.collapsed = new Set(state.streets.map((s) => s.key));
+  state.collapsed = new Set(sectionsWithAdditions().map((s) => s.key));
   dom.filters.hidden = false;
   render();
   renderExtras();

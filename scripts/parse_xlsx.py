@@ -36,6 +36,15 @@ AREA_ALIAS = {
 
 NO_STREET = '地址未含街道'
 
+# 優先跑的市區路段，固定排在所有街道最前面，順序就照這裡列的
+PRIORITY_STREETS = [
+    ('馬公市', '中正路'),
+    ('馬公市', '民權路'),
+    ('馬公市', '中華路'),
+    ('馬公市', '陽明路'),
+    ('馬公市', '三多路'),
+]
+
 # 各分頁的欄位對應（欄位順序在每張分頁都不一樣，不能共用）
 SHEETS = OrderedDict([
     ('旅行社', OrderedDict([('項次', 1), ('項目', 2), ('名稱', 3), ('地址', 4),
@@ -193,7 +202,10 @@ def build_streets(records):
 
     def sort_key(item):
         (town, street), items = item
-        return (town != '馬公市', town, -len(items), street)
+        # 優先路段照 PRIORITY_STREETS 的順序排在最前，其餘沿用原本的規則
+        rank = (PRIORITY_STREETS.index((town, street))
+                if (town, street) in PRIORITY_STREETS else len(PRIORITY_STREETS))
+        return (rank, town != '馬公市', town, -len(items), street)
 
     streets = []
     for (town, street), items in sorted(buckets.items(), key=sort_key):
