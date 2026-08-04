@@ -12,6 +12,7 @@ import {
   ACCEPTED_TYPES, addPhoto, loadFromDb as loadPhotos, photoFiles,
   readPhoto, removePhoto, snapshot as photosSnapshot,
 } from './photos.js';
+import { seedIfEmpty } from './seed.js';
 import {
   getStore, loadFromDb as loadStatus, snapshot, statusFilePath, updateStore,
 } from './store.js';
@@ -233,6 +234,7 @@ app.get('/healthz', (req, res) => {
 // 先把資料庫的內容載進來再開始服務，免得第一個開頁面的人看到空的
 try {
   if (await db.init()) {
+    await seedIfEmpty();
     const loaded = await Promise.all([loadStatus(), loadAdditions(), loadPhotos()]);
     console.log(`[db] 已載入：發送狀態=${loaded[0] ? '有' : '無'}、`
       + `新增店家=${loaded[1] ? '有' : '無'}、照片索引=${loaded[2] ? '有' : '無'}`);
