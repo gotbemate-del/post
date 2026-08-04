@@ -46,19 +46,31 @@ npm start                            # http://localhost:3000
 
 ## 部署到 Render
 
-服務已經建立好的話，照下面設定即可（或直接套用 `render.yaml` Blueprint）：
+目前部署在 **free 方案**（`render.yaml` 就是這個設定）：
 
 | 項目 | 值 |
 | --- | --- |
 | Build Command | `npm ci` |
 | Start Command | `npm start` |
 | Health Check Path | `/healthz` |
-| Environment Variable | `DATA_DIR=/var/data` |
-| Disk | 掛載到 `/var/data`，1 GB |
+| Region | Singapore |
+| Disk | 無 |
 
-**Persistent Disk 是必要的。** 填寫的聯繫狀態存在 `$DATA_DIR/status.json`，沒有掛載磁碟的話
-每次重新部署就會回到 Excel 的初始狀態。Render 的 Free 方案不支援 Persistent Disk，需要
-Starter 以上；若暫時只想試用，不設 `DATA_DIR` 也能跑，但重啟後填寫內容會消失。
+**⚠️ free 方案的填寫紀錄不會保留。** 聯繫狀態存在 `data/status.json`，而 free 方案的檔案系統
+是暫時的——服務休眠重啟或重新部署後，所有人填的內容都會歸零、退回 Excel 的初始狀態。
+
+要長期保留紀錄，把 `render.yaml` 改成 Starter 以上並掛 Persistent Disk（free 不支援）：
+
+```yaml
+plan: starter
+envVars:
+  - key: DATA_DIR
+    value: /var/data
+disk:
+  name: store-status
+  mountPath: /var/data
+  sizeGB: 1
+```
 
 Render 的免費／Starter 方案在閒置後會休眠，第一次開啟頁面約需 30 秒喚醒，屬正常現象。
 
