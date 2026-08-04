@@ -19,7 +19,8 @@ const state = {
 const el = (id) => document.getElementById(id);
 const dom = {
   main: el('main'), placeholder: el('placeholder'), filters: el('filters'),
-  stats: el('stats'), progressWrap: el('progressWrap'), progressFill: el('progressFill'),
+  stats: el('stats'), statsDaily: el('statsDaily'),
+  progressWrap: el('progressWrap'), progressFill: el('progressFill'),
   progressText: el('progressText'), conn: el('conn'), toast: el('toast'),
   q: el('q'), fTown: el('fTown'), fCategory: el('fCategory'), fStatus: el('fStatus'),
   fStreet: el('fStreet'), fPending: el('fPending'), fSentOriginal: el('fSentOriginal'),
@@ -31,6 +32,12 @@ const dom = {
 };
 
 const ADDED_CATEGORY = '新增';
+
+/**
+ * 要單獨列出完成數的日期（台灣時間），依打勾時間 sentAt 分組。
+ * 要增減天數改這裡就好；名單外的日期會併進「其他」那一格。
+ */
+const DAILY_DATES = ['2026-08-04', '2026-08-05', '2026-08-06'];
 
 /* ------------------------------------------------------------------ 工具 */
 
@@ -72,6 +79,23 @@ function telHref(phone) {
 
 /** 已發送與已張貼都算「已處理」，進度條與街道比例用這個判斷。 */
 const isHandled = (status) => status !== '未發送';
+
+/** 把時戳換算成台灣時間的 YYYY-MM-DD，用來分日統計。 */
+const taipeiDateFmt = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit',
+});
+
+function taipeiDate(iso) {
+  if (!iso) return '';
+  const at = new Date(iso);
+  return Number.isNaN(at.getTime()) ? '' : taipeiDateFmt.format(at);
+}
+
+/** 8/4 這種顯示用的短日期。 */
+function shortDate(isoDate) {
+  const [, month, day] = isoDate.split('-');
+  return `${Number(month)}/${Number(day)}`;
+}
 
 /** 打勾時間顯示成台灣時間；沒有時戳但原始名單有底色的，標成「原始名單標記」。 */
 function sentAtLabel(store) {
@@ -173,11 +197,33 @@ function renderSummary() {
   // 新增到原始名單沒有的街道時，分區數會比原本的 92 條多
   el('statStreets').textContent = sectionsWithAdditions().length;
 
+  renderDaily(all);
+
   const pct = all.length ? Math.round((handled / all.length) * 100) : 0;
   dom.progressFill.style.width = `${pct}%`;
   dom.progressText.textContent = `${handled}/${all.length} 已處理（${pct}%）`;
   dom.stats.hidden = false;
   dom.progressWrap.hidden = false;
+}
+
+/** 依打勾日期分組的完成數。DAILY_DATES 以外的日期併成「其他」，才不會有紀錄看不見。 */
+function renderDaily(all) {
+  const counts = new Map(DAILY_DATES.map((d) => [d, 0]));
+  let other = 0;
+  for (const store of all) {
+    const date = taipeiDate(store.sentAt);
+    if (!date) continue;
+    if (counts.has(date)) counts.set(date, counts.get(date) + 1);
+    else other += 1;
+  }
+
+  const tiles = [...counts].map(([date, n]) =>
+    `<div class="stat"><span class="stat__num">${n}</span><span class="stat__label">${shortDate(date)} 完成</span></div>`);
+  if (other) {
+    tiles.push(`<div class="stat"><span class="stat__num">${other}</span><span class="stat__label">其他日期</span></div>`);
+  }
+  dom.statsDaily.innerHTML = tiles.join('');
+  dom.statsDaily.hidden = false;
 }
 
 function storeCard(store) {

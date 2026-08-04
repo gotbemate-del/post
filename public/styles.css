@@ -63,6 +63,10 @@ body {
   background: rgba(255, 255, 255, .12); border-radius: 10px;
   padding: 7px 4px; text-align: center;
 }
+/* 分日完成數：和上面那排統計區隔開，用比較低調的底 */
+.stats--daily { margin-top: 6px; }
+.stats--daily .stat { background: rgba(255, 255, 255, .07); padding: 5px 4px; }
+.stats--daily .stat__num { font-size: .95rem; }
 .stat__num { display: block; font-size: 1.05rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .stat__label { display: block; font-size: .66rem; opacity: .8; margin-top: 1px; }
 
