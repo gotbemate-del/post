@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
 import { makeWriter, readJson } from './jsonfile.js';
-import { DATA_DIR, STATUS_OPTIONS, isHandled, streetOptions } from './store.js';
+import { DATA_DIR, STATUS_OPTIONS, isHandled, stampSentAt, streetOptions } from './store.js';
 
 /**
  * 「新增家數」——原始名單以外、在外面跑的時候現場加進來的店家。
@@ -33,6 +33,7 @@ function text(value, field) {
 
 /** 把送進來的欄位套到 record 上，順便做驗證。patch 沒帶到的欄位不動。 */
 function applyFields(record, patch) {
+  const before = record.status;
   for (const field of ['name', 'address', 'phone', 'town', 'street']) {
     const value = text(patch[field], field);
     if (value !== undefined) record[field] = value;
@@ -46,6 +47,7 @@ function applyFields(record, patch) {
   }
   if (!record.name) throw new Error('店家名稱是必填的');
   if (!record.street) record.street = NO_STREET;
+  stampSentAt(record, before);
   record.updatedAt = new Date().toISOString();
   return record;
 }
@@ -55,6 +57,7 @@ export function createAddition(patch = {}) {
     id: `新增-${randomUUID().slice(0, 8)}`,
     name: '', address: '', phone: '', town: '', street: '',
     status: '未發送',
+    sentAt: null,
     createdAt: new Date().toISOString(),
     updatedAt: null,
   }, patch);

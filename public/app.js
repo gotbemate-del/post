@@ -73,6 +73,18 @@ function telHref(phone) {
 /** 已發送與已張貼都算「已處理」，進度條與街道比例用這個判斷。 */
 const isHandled = (status) => status !== '未發送';
 
+/** 打勾時間顯示成台灣時間；沒有時戳但原始名單有底色的，標成「原始名單標記」。 */
+function sentAtLabel(store) {
+  if (!isHandled(store.status)) return '';
+  if (!store.sentAt) return store.sent ? '🕒 原始名單標記' : '';
+  const at = new Date(store.sentAt);
+  if (Number.isNaN(at.getTime())) return '';
+  return `🕒 ${at.toLocaleString('zh-TW', {
+    timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  })}`;
+}
+
 function fillSelect(select, values, placeholder) {
   select.innerHTML = `<option value="">${placeholder}</option>` +
     values.map((v) => `<option value="${escapeAttr(v)}">${escapeHtml(v)}</option>`).join('');
@@ -194,6 +206,7 @@ function storeCard(store) {
     ${store.phone ? `<span>📞 ${tel ? `<a href="${escapeAttr(tel)}">${escapeHtml(store.phone)}</a>` : escapeHtml(store.phone)}</span>` : ''}
     ${store.hours ? `<span>🕘 ${escapeHtml(store.hours)}</span>` : ''}
     ${store.note ? `<span>📝 ${escapeHtml(store.note)}</span>` : ''}
+    <span class="store__sentat" data-role="sentat">${escapeHtml(sentAtLabel(store))}</span>
   </div>
   <div class="store__actions">
     ${url ? `<a class="linkbtn" href="${escapeAttr(url)}" target="_blank" rel="noopener">官網／粉專</a>` : ''}
@@ -268,6 +281,7 @@ function patchCard(store) {
   const tag = card.querySelector('.tag--status');
   tag.dataset.v = store.status;
   tag.textContent = store.status;
+  card.querySelector('[data-role="sentat"]').textContent = sentAtLabel(store);
 
   for (const field of ['status', 'contactedAt', 'channel', 'owner', 'reply']) {
     const input = card.querySelector(`[data-field="${field}"]`);

@@ -45,6 +45,17 @@ function telHref(phone) {
   return digits.length >= 6 ? `tel:${digits}` : '';
 }
 
+/** 打勾時間顯示成台灣時間。 */
+function sentAtLabel(record) {
+  if (!record.sentAt) return '';
+  const at = new Date(record.sentAt);
+  if (Number.isNaN(at.getTime())) return '';
+  return `🕒 ${at.toLocaleString('zh-TW', {
+    timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  })}`;
+}
+
 async function api(url, options) {
   const res = await fetch(url, options);
   if (!res.ok) {
@@ -72,9 +83,11 @@ function card(record) {
     .join('');
 
   // 地址／電話都空的時候整塊不要輸出，否則會留下一段空白
+  const sentAt = sentAtLabel(record);
   const meta = [
     record.address ? `<span>📍 ${escapeHtml(record.address)}</span>` : '',
     record.phone ? `<span>📞 ${tel ? `<a href="${escapeAttr(tel)}">${escapeHtml(record.phone)}</a>` : escapeHtml(record.phone)}</span>` : '',
+    sentAt ? `<span class="store__sentat">${escapeHtml(sentAt)}</span>` : '',
   ].join('');
   const actions = [
     record.address ? `<a class="linkbtn" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(record.address)}" target="_blank" rel="noopener">地圖</a>` : '',

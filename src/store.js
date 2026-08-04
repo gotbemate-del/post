@@ -54,12 +54,27 @@ function loadStatus() {
 function defaultsFor(store) {
   return {
     status: store.sent ? '已發送' : '未發送',
+    sentAt: null,        // 打勾當下的時間，由伺服器蓋，前端不能改
     contactedAt: '',
     channel: '',
     owner: '',
     reply: '',
     updatedAt: null,
   };
+}
+
+/**
+ * 依狀態變化維護 sentAt：第一次從「未發送」勾成已發送／已張貼時蓋上時間，
+ * 之後在已發送⇄已張貼之間切換不覆蓋（發送時間就是第一次寄出的時間），
+ * 改回「未發送」則清掉。
+ */
+export function stampSentAt(record, before) {
+  if (record.status === '未發送') {
+    record.sentAt = null;
+  } else if (!record.sentAt && (before === '未發送' || before === undefined)) {
+    record.sentAt = new Date().toISOString();
+  }
+  return record;
 }
 
 export function getStore(id) {
@@ -113,6 +128,7 @@ export function updateStore(id, patch) {
   if (!storeIndex.has(id)) return null;
 
   const next = { ...defaultsFor(storeIndex.get(id)), ...(status[id] ?? {}) };
+  const before = next.status;
   for (const field of EDITABLE) {
     if (!(field in patch)) continue;
     const value = patch[field];
@@ -130,6 +146,7 @@ export function updateStore(id, patch) {
     }
     next[field] = value.slice(0, 500);
   }
+  stampSentAt(next, before);
   next.updatedAt = new Date().toISOString();
 
   status[id] = next;
