@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { makeWriter, readJson } from './jsonfile.js';
+import { createSync } from './remotejson.js';
 
 /**
  * 店家狀態儲存層。
@@ -37,17 +38,28 @@ const LEGACY_STATUS = {
 const catalog = JSON.parse(fs.readFileSync(STORES_FILE, 'utf8'));
 const storeIndex = new Map(catalog.stores.map((s) => [s.id, s]));
 
-const status = loadStatus();
-const scheduleWrite = makeWriter(STATUS_FILE, () => status);
+let status = normalize(readJson(STATUS_FILE, {}));
+const writeLocal = makeWriter(STATUS_FILE, () => status);
 
-function loadStatus() {
-  const raw = readJson(STATUS_FILE, {});
-  // 舊檔案可能還存著六段式狀態，讀進來就順手正規化
+/** 舊檔案可能還存著六段式狀態，讀進來就順手正規化。 */
+function normalize(raw) {
+  if (!raw || typeof raw !== 'object') return {};
   for (const record of Object.values(raw)) {
     const mapped = LEGACY_STATUS[record?.status];
     if (mapped) record.status = mapped;
   }
   return raw;
+}
+
+export const statusSync = createSync('state/status.json', {
+  read: () => status,
+  apply: (data) => { status = normalize(data); },
+  label: () => `發送狀態：${Object.keys(status).length} 筆`,
+});
+
+function scheduleWrite() {
+  writeLocal();
+  statusSync.schedule();
 }
 
 /** 原始 Excel 有底色 = 已發送，作為沒有人工紀錄時的預設狀態。 */

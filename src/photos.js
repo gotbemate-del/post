@@ -4,6 +4,7 @@ import path from 'node:path';
 
 import * as github from './github.js';
 import { makeWriter, readJson } from './jsonfile.js';
+import { createSync } from './remotejson.js';
 import { DATA_DIR } from './store.js';
 
 /**
@@ -12,7 +13,7 @@ import { DATA_DIR } from './store.js';
  * 圖檔存在 $DATA_DIR/photos/，索引（哪張屬於哪家店）存在 $DATA_DIR/photos.json。
  * 上傳前前端已經縮圖、壓成 JPEG，並把店名燒在左上角，所以這裡只負責存檔。
  *
- * 有設 GITHUB_TOKEN 時，每張照片和索引都會再推一份到 GitHub 的照片分支，
+ * 有設 GITHUB_TOKEN 時，每張照片和索引都會再推一份到 GitHub 的資料分支，
  * 本機那份只當快取——Render 的 free 方案重啟就清空，開機時再從 GitHub 拉回索引，
  * 圖檔則等有人要看的時候才回源抓（見 server.js 的 /photos 路由）。
  *
@@ -26,11 +27,16 @@ const EXTENSION = { 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/png': 'png
 export const ACCEPTED_TYPES = Object.keys(EXTENSION);
 
 const GITHUB_DIR = 'photos';
-const GITHUB_INDEX = 'photos/index.json';
 
 let items = load();
-let indexSha = null;                  // GitHub 上 index.json 的 sha，更新時要帶
-const scheduleWrite = makeWriter(INDEX_FILE, () => items);
+const writeLocal = makeWriter(INDEX_FILE, () => items);
+
+export const photosSync = createSync('photos/index.json', {
+  read: () => items,
+  apply: (data) => { if (Array.isArray(data)) items = data; },
+  label: () => `照片索引：${items.length} 張`,
+  delay: 0,        // 照片本體已經推上去了，索引跟著立刻推，不然重啟會對不起來
+});
 
 function load() {
   const raw = readJson(INDEX_FILE, []);
@@ -46,39 +52,9 @@ function load() {
 
 /** 開機時把 GitHub 上的索引拉回來，蓋掉本機那份（本機只是快取）。 */
 export async function restore() {
-  if (!github.enabled()) {
-    console.log('[photos] 未設定 GITHUB_TOKEN，照片只存在本機，重啟後會消失');
-    return;
-  }
-  try {
-    await github.ensureBranch();
-    const file = await github.getFile(GITHUB_INDEX);
-    if (!file) {
-      console.log(`[photos] GitHub ${github.config.branch} 分支還沒有照片索引，從空的開始`);
-      return;
-    }
-    const parsed = JSON.parse(file.content.toString('utf8'));
-    if (Array.isArray(parsed)) {
-      items = parsed;
-      indexSha = file.sha;
-      scheduleWrite();
-      console.log(`[photos] 已從 GitHub 還原 ${items.length} 張照片的索引`);
-    }
-  } catch (err) {
-    console.error('[photos] 從 GitHub 還原索引失敗，改用本機那份：', err.message);
-  }
-}
-
-async function pushIndex() {
-  const body = Buffer.from(JSON.stringify(items, null, 1), 'utf8');
-  try {
-    indexSha = await github.putFile(GITHUB_INDEX, body, `照片索引：${items.length} 張`, indexSha);
-  } catch (err) {
-    // 兩台同時上傳會撞 sha，重抓一次最新的再寫
-    if (err.status !== 409 && err.status !== 422) throw err;
-    const current = await github.getFile(GITHUB_INDEX);
-    indexSha = current?.sha;
-    indexSha = await github.putFile(GITHUB_INDEX, body, `照片索引：${items.length} 張`, indexSha);
+  if (await photosSync.restore()) {
+    writeLocal();
+    console.log(`[photos] 已從 GitHub 還原 ${items.length} 張照片的索引`);
   }
 }
 
@@ -122,8 +98,8 @@ export async function addPhoto({ storeId, storeName, buffer, mime }) {
   fs.mkdirSync(PHOTO_DIR, { recursive: true });
   fs.writeFileSync(path.join(PHOTO_DIR, file), buffer);
   items.push(record);
-  scheduleWrite();
-  if (github.enabled()) await pushIndex();
+  writeLocal();
+  await photosSync.flush();
   return record;
 }
 
@@ -146,8 +122,8 @@ export async function removePhoto(id) {
     }
   }
 
-  scheduleWrite();
-  if (github.enabled()) await pushIndex();
+  writeLocal();
+  await photosSync.flush();
   return true;
 }
 

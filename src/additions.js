@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
 import { makeWriter, readJson } from './jsonfile.js';
+import { createSync } from './remotejson.js';
 import { DATA_DIR, STATUS_OPTIONS, isHandled, stampSentAt, streetOptions } from './store.js';
 
 /**
@@ -18,11 +19,22 @@ const NO_STREET = '未分類';
 const LIMITS = { name: 200, address: 500, phone: 60, town: 40, street: 60 };
 
 let items = load();
-const scheduleWrite = makeWriter(FILE, () => items);
+const writeLocal = makeWriter(FILE, () => items);
 
 function load() {
   const raw = readJson(FILE, []);
   return Array.isArray(raw) ? raw : [];
+}
+
+export const additionsSync = createSync('state/additions.json', {
+  read: () => items,
+  apply: (data) => { if (Array.isArray(data)) items = data; },
+  label: () => `新增店家：${items.length} 家`,
+});
+
+function scheduleWrite() {
+  writeLocal();
+  additionsSync.schedule();
 }
 
 function text(value, field) {

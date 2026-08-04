@@ -7,9 +7,10 @@
 #      data/additions.json  新增的店家
 #      data/photos/         佐證照片
 #
-# 佐證照片可以改存 GitHub 來閃掉這個問題 —— 設好 GITHUB_TOKEN 就會自動生效，
-# 照片和索引都會推到 GITHUB_PHOTO_BRANCH 指定的分支（見下方說明）。
-# 發送狀態和新增的店家還是只在檔案系統上，要保留就得掛磁碟：
+# 設好 GITHUB_TOKEN 就能閃掉這個問題 —— 三種資料都會同步到 GitHub 的資料分支，
+# 重啟時自動還原，free 方案也不會掉（見下方 envVars）。
+#
+# 不想用 GitHub 的話，另一條路是掛 Persistent Disk（Starter 以上才支援）：
 #   plan: starter
 #   envVars:  加一組 DATA_DIR = /var/data
 #   disk:     name: store-status / mountPath: /var/data / sizeGB: 1
@@ -26,14 +27,14 @@ services:
       - key: NODE_VERSION
         value: "20"
 
-      # 佐證照片存到 GitHub。沒設 GITHUB_TOKEN 的話照片只留在本機檔案系統，重啟就消失。
-      # token 需要對 GITHUB_REPO 有 contents:write 權限；sync: false 表示值不寫進版控，
-      # 要在 Render 的 Environment 頁面自己填。
+      # 發送狀態／新增店家／佐證照片都同步到 GitHub。沒設 GITHUB_TOKEN 的話只留在本機
+      # 檔案系統，重啟就消失。token 需要對 GITHUB_REPO 有 contents:write 權限；
+      # sync: false 表示值不寫進版控，要在 Render 的 Environment 頁面自己填。
       - key: GITHUB_TOKEN
         sync: false
       - key: GITHUB_REPO
         value: gotbemate-del/post
       # ⚠️ 一定要跟上面的部署分支不同。Render 的 auto-deploy 綁在部署分支，
-      #    照片推到那條分支的話，每上傳一張就重新部署一次。
-      - key: GITHUB_PHOTO_BRANCH
-        value: photos
+      #    資料推到那條分支的話，每存一筆就重新部署一次。
+      - key: GITHUB_DATA_BRANCH
+        value: app-data

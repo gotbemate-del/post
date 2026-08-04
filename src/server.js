@@ -3,16 +3,16 @@ import path from 'node:path';
 import express from 'express';
 
 import {
-  additionsFilePath, createAddition, removeAddition,
+  additionsFilePath, additionsSync, createAddition, removeAddition,
   snapshot as additionsSnapshot, updateAddition,
 } from './additions.js';
 import * as githubStore from './github.js';
 import {
-  ACCEPTED_TYPES, addPhoto, ensureLocal, photoDir, photoFiles, removePhoto,
-  restore as restorePhotos, snapshot as photosSnapshot,
+  ACCEPTED_TYPES, addPhoto, ensureLocal, photoDir, photoFiles, photosSync,
+  removePhoto, restore as restorePhotos, snapshot as photosSnapshot,
 } from './photos.js';
+import { getStore, snapshot, statusFilePath, statusSync, updateStore } from './store.js';
 import { writeZip } from './zip.js';
-import { getStore, snapshot, statusFilePath, updateStore } from './store.js';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const PORT = process.env.PORT || 3000;
@@ -189,16 +189,49 @@ app.get('/healthz', (req, res) => {
     clients: clients.size,
     statusFile: statusFilePath(),
     additionsFile: additionsFilePath(),
-    photoStorage: githubStore.enabled()
+    storage: githubStore.enabled()
       ? { kind: 'github', ...githubStore.config }
-      : { kind: 'local', warning: '未設定 GITHUB_TOKEN，照片重啟後會消失' },
+      : { kind: 'local', warning: '未設定 GITHUB_TOKEN，資料與照片重啟後會消失' },
   });
 });
 
-// 先把 GitHub 上的照片索引拉回來再開始服務，免得第一個開頁面的人看到空的
-await restorePhotos();
+/* ------------------------------------------------------- 開機還原 / 關站保存 */
 
-app.listen(PORT, () => {
+// 先把 GitHub 上的資料拉回來再開始服務，免得第一個開頁面的人看到空的
+if (githubStore.enabled()) {
+  try {
+    await githubStore.readyBranch();
+    const restored = await Promise.all([
+      statusSync.restore(), additionsSync.restore(), restorePhotos(),
+    ]);
+    console.log(`[github] 資料分支 ${githubStore.config.branch}，`
+      + `已還原：發送狀態=${restored[0] ? '有' : '無'}、新增店家=${restored[1] ? '有' : '無'}`);
+  } catch (err) {
+    console.error('[github] 開機還原失敗，改用本機資料：', err.message);
+  }
+} else {
+  console.log('[storage] 未設定 GITHUB_TOKEN，資料只存在本機，重啟後會消失');
+}
+
+const server = app.listen(PORT, () => {
   console.log(`澎湖店家確認表單 → http://localhost:${PORT}`);
   console.log(`狀態檔：${statusFilePath()}`);
 });
+
+// Render 重新部署前會送 SIGTERM，這時候要把還在防抖等待中的異動推完再走
+let closing = false;
+for (const signal of ['SIGTERM', 'SIGINT']) {
+  process.on(signal, async () => {
+    if (closing) return;
+    closing = true;
+    server.close();
+    for (const res of clients) res.end();
+    try {
+      await Promise.all([statusSync.flush(), additionsSync.flush(), photosSync.flush()]);
+      console.log('[storage] 關站前已把待推送的異動寫回 GitHub');
+    } catch (err) {
+      console.error('[storage] 關站前推送失敗：', err.message);
+    }
+    process.exit(0);
+  });
+}
