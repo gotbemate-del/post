@@ -20,13 +20,13 @@ const STATUS_FILE = path.join(DATA_DIR, 'status.json');
 export const STATUS_OPTIONS = ['未發送', '已發送'];
 export const CHANNEL_OPTIONS = ['現場拜訪', '電話', 'LINE', 'Email', 'FB/IG 私訊'];
 
-/** 舊版的六段式狀態 → 現在的二元狀態。曾經寄出過的一律算「已發送」。 */
+/** 舊版的六段式狀態 → 現在的二元狀態。只有「已合作」算已發送，其餘一律未發送。 */
 const LEGACY_STATUS = {
   未聯繫: '未發送',
-  已回覆: '已發送',
+  已回覆: '未發送',
   已合作: '已發送',
-  婉拒: '已發送',
-  聯繫不上: '已發送',
+  婉拒: '未發送',
+  聯繫不上: '未發送',
 };
 
 const catalog = JSON.parse(fs.readFileSync(STORES_FILE, 'utf8'));
